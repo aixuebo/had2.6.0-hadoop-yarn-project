@@ -169,6 +169,7 @@ public class NodeHealthScriptRunner extends AbstractService {
         setHealthStatus(false, exceptionStackTrace);
         break;
       case FAILED_WITH_EXIT_CODE:
+    	  //脚本异常导致的退出,因此说明NodeManager是正常的
         setHealthStatus(true, "", now);
         break;
       case FAILED:

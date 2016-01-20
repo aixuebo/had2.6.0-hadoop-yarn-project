@@ -35,6 +35,9 @@ import org.apache.hadoop.yarn.api.records.ApplicationAccessType;
 import org.apache.hadoop.yarn.conf.YarnConfiguration;
 import org.apache.hadoop.yarn.security.AdminACLsManager;
 
+/**
+ * 为每一个application添加权限信息
+ */
 @InterfaceAudience.Private
 public class ApplicationACLsManager {
 
@@ -45,6 +48,8 @@ public class ApplicationACLsManager {
     = new AccessControlList(YarnConfiguration.DEFAULT_YARN_APP_ACL);
   private final Configuration conf;
   private final AdminACLsManager adminAclsManager;
+  
+  //表示每一个应用,在哪些任务下有哪些权限
   private final ConcurrentMap<ApplicationId, Map<ApplicationAccessType, AccessControlList>> applicationACLS
     = new ConcurrentHashMap<ApplicationId, Map<ApplicationAccessType, AccessControlList>>();
 
@@ -57,6 +62,11 @@ public class ApplicationACLsManager {
     return adminAclsManager.areACLsEnabled();
   }
 
+  /**
+   * 为一个应用,添加权限
+   * @param appId
+   * @param acls
+   */
   public void addApplication(ApplicationId appId,
       Map<ApplicationAccessType, String> acls) {
     Map<ApplicationAccessType, AccessControlList> finalMap
@@ -98,8 +108,9 @@ public class ApplicationACLsManager {
           + applicationOwner);
     }
 
+    //获取调用者是谁
     String user = callerUGI.getShortUserName();
-    if (!areACLsEnabled()) {
+    if (!areACLsEnabled()) {//是否启用了校验权限功能,false表示没启用,则直接通过
       return true;
     }
     AccessControlList applicationACL = DEFAULT_YARN_APP_ACL;

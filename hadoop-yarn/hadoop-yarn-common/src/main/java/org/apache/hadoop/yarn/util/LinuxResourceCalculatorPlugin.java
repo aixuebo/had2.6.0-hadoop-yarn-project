@@ -46,7 +46,7 @@ public class LinuxResourceCalculatorPlugin extends ResourceCalculatorPlugin {
    * proc's meminfo virtual file has keys-values in the format
    * "key:[ \t]*value[ \t]kB".
    */
-  private static final String PROCFS_MEMFILE = "/proc/meminfo";
+  private static final String PROCFS_MEMFILE = "/proc/meminfo";//该文件可以获取机器的所有统计信息
   private static final Pattern PROCFS_MEMFILE_FORMAT =
       Pattern.compile("^([a-zA-Z]*):[ \t]*([0-9]*)[ \t]kB");
 
@@ -60,9 +60,9 @@ public class LinuxResourceCalculatorPlugin extends ResourceCalculatorPlugin {
   /**
    * Patterns for parsing /proc/cpuinfo
    */
-  private static final String PROCFS_CPUINFO = "/proc/cpuinfo";
+  private static final String PROCFS_CPUINFO = "/proc/cpuinfo";//该文件表示cpu的全部信息,包括有多少个cpu等信息
   private static final Pattern PROCESSOR_FORMAT =
-      Pattern.compile("^processor[ \t]:[ \t]*([0-9]*)");
+      Pattern.compile("^processor[ \t]:[ \t]*([0-9]*)");//每一个cpu信息,都会以他开头,因此该值就是计算cpu核数
   private static final Pattern FREQUENCY_FORMAT =
       Pattern.compile("^cpu MHz[ \t]*:[ \t]*([0-9.]*)");
 
@@ -74,17 +74,17 @@ public class LinuxResourceCalculatorPlugin extends ResourceCalculatorPlugin {
     Pattern.compile("^cpu[ \t]*([0-9]*)" +
     		            "[ \t]*([0-9]*)[ \t]*([0-9]*)[ \t].*");
 
-  private String procfsMemFile;//文件所在位置
-  private String procfsCpuFile;
-  private String procfsStatFile;
+  private String procfsMemFile;///proc/meminfo
+  private String procfsCpuFile;///proc/cpuinfo
+  private String procfsStatFile;///proc/stat
   long jiffyLengthInMillis;
 
-  private long ramSize = 0;
-  private long swapSize = 0;
+  private long ramSize = 0;//内存大小,单位是k
+  private long swapSize = 0;//交换空间大小,单位是k
   private long ramSizeFree = 0;  // free ram space on the machine (kB)
   private long swapSizeFree = 0; // free swap space on the machine (kB)
   private long inactiveSize = 0; // inactive cache memory (kB)
-  private int numProcessors = 0; // number of processors on the system
+  private int numProcessors = 0; // number of processors on the system 操作系统有多少个cpu,即如果16核,则该值为16
   private long cpuFrequency = 0L; // CPU frequency on the system (kHz)
   private long cumulativeCpuTime = 0L; // CPU used time since system is on (ms)
   private long lastCumulativeCpuTime = 0L; // CPU used time read last time (ms)
@@ -93,8 +93,8 @@ public class LinuxResourceCalculatorPlugin extends ResourceCalculatorPlugin {
   private long sampleTime = UNAVAILABLE;
   private long lastSampleTime = UNAVAILABLE;
 
-  boolean readMemInfoFile = false;
-  boolean readCpuInfoFile = false;
+  boolean readMemInfoFile = false;//true说明曾经已经加载过/proc/meminfo文件了
+  boolean readCpuInfoFile = false;//true说明曾经已经加载过/proc/cpuinfo文件了
 
   /**
    * Get current time
@@ -131,6 +131,7 @@ public class LinuxResourceCalculatorPlugin extends ResourceCalculatorPlugin {
 
   /**
    * Read /proc/meminfo, parse and compute memory information only once
+   * 读取内存文件信息/proc/meminfo
    */
   private void readProcMemInfoFile() {
     readProcMemInfoFile(false);
@@ -139,6 +140,8 @@ public class LinuxResourceCalculatorPlugin extends ResourceCalculatorPlugin {
   /**
    * Read /proc/meminfo, parse and compute memory information
    * @param readAgain if false, read only on the first time
+   * 读取内存文件信息/proc/meminfo
+   * 参数readAgain 如果谁true,表示要重新加载一次,false表示仅仅加载一次即可
    */
   private void readProcMemInfoFile(boolean readAgain) {
 
@@ -199,6 +202,7 @@ public class LinuxResourceCalculatorPlugin extends ResourceCalculatorPlugin {
 
   /**
    * Read /proc/cpuinfo, parse and calculate CPU information
+   * 读取/proc/cpuinfo文件
    */
   private void readProcCpuInfoFile() {
     // This directory needs to be read only once
@@ -220,7 +224,7 @@ public class LinuxResourceCalculatorPlugin extends ResourceCalculatorPlugin {
       numProcessors = 0;
       String str = in.readLine();
       while (str != null) {
-        mat = PROCESSOR_FORMAT.matcher(str);
+        mat = PROCESSOR_FORMAT.matcher(str);//计算cpu核数
         if (mat.find()) {
           numProcessors++;
         }
@@ -250,6 +254,7 @@ public class LinuxResourceCalculatorPlugin extends ResourceCalculatorPlugin {
 
   /**
    * Read /proc/stat file, parse and calculate cumulative CPU
+   * 读取/proc/stat文件
    */
   private void readProcStatFile() {
     // Read "/proc/stat" file
@@ -295,42 +300,54 @@ public class LinuxResourceCalculatorPlugin extends ResourceCalculatorPlugin {
     }
   }
 
-  /** {@inheritDoc} */
+  /** {@inheritDoc} 
+   * 单位是字节,获取所有的物理内存大小 
+   **/
   @Override
   public long getPhysicalMemorySize() {
     readProcMemInfoFile();
     return ramSize * 1024;
   }
 
-  /** {@inheritDoc} */
+  /** {@inheritDoc} 
+   * 单位是字节,获取所有的虚拟内存大小
+   **/
   @Override
   public long getVirtualMemorySize() {
     readProcMemInfoFile();
     return (ramSize + swapSize) * 1024;
   }
 
-  /** {@inheritDoc} */
+  /** {@inheritDoc} 
+   * 剩余物理内存大小,单位是字节 
+   **/
   @Override
   public long getAvailablePhysicalMemorySize() {
     readProcMemInfoFile(true);
     return (ramSizeFree + inactiveSize) * 1024;
   }
 
-  /** {@inheritDoc} */
+  /** {@inheritDoc} 
+   * 剩余虚拟内存大小,单位是字节 
+   */
   @Override
   public long getAvailableVirtualMemorySize() {
     readProcMemInfoFile(true);
     return (ramSizeFree + swapSizeFree + inactiveSize) * 1024;
   }
 
-  /** {@inheritDoc} */
+  /** {@inheritDoc} 
+   * 多少个cpu
+   **/
   @Override
   public int getNumProcessors() {
     readProcCpuInfoFile();
     return numProcessors;
   }
 
-  /** {@inheritDoc} */
+  /** {@inheritDoc} 
+   * cpu使用频率
+   **/
   @Override
   public long getCpuFrequency() {
     readProcCpuInfoFile();

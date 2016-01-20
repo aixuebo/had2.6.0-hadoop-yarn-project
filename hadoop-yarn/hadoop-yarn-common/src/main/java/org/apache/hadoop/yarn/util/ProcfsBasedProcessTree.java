@@ -45,6 +45,7 @@ import org.apache.hadoop.yarn.conf.YarnConfiguration;
 
 /**
  * A Proc file-system based ProcessTree. Works only on Linux.
+ * 一个进程一个该对象,该对象存储了该进程的所有子子孙孙进程对象的统计信息
  */
 @InterfaceAudience.Private
 @InterfaceStability.Unstable
@@ -60,8 +61,8 @@ public class ProcfsBasedProcessTree extends ResourceCalculatorProcessTree {
     "([0-9-]+\\s){7}([0-9]+)\\s([0-9]+)\\s([0-9-]+\\s){7}([0-9]+)\\s([0-9]+)" +
     "(\\s[0-9-]+){15}");
 
-  public static final String PROCFS_STAT_FILE = "stat";
-  public static final String PROCFS_CMDLINE_FILE = "cmdline";
+  public static final String PROCFS_STAT_FILE = "stat";//读取/proc/11132/stat文件内容,即该进程的统计信息
+  public static final String PROCFS_CMDLINE_FILE = "cmdline";//读取/proc/11132/cmdline文件内容,即该进程对应的命令
   public static final long PAGE_SIZE;
   public static final long JIFFY_LENGTH_IN_MILLIS; // in millisecond
 
@@ -89,7 +90,7 @@ public class ProcfsBasedProcessTree extends ResourceCalculatorProcessTree {
     }
   }
 
-  public static final String SMAPS = "smaps";
+  public static final String SMAPS = "smaps";//读取/proc/11132/smaps文件内容
   public static final int KB_TO_BYTES = 1024;
   private static final String KB = "kB";
   private static final String READ_ONLY_WITH_SHARED_PERMISSION = "r--s";
@@ -109,11 +110,13 @@ public class ProcfsBasedProcessTree extends ResourceCalculatorProcessTree {
     long pageSize = -1;
     try {
       if(Shell.LINUX) {
+    	//执行以下命令getconf CLK_TCK
         ShellCommandExecutor shellExecutorClk = new ShellCommandExecutor(
             new String[] { "getconf", "CLK_TCK" });
         shellExecutorClk.execute();
         jiffiesPerSecond = Long.parseLong(shellExecutorClk.getOutput().replace("\n", ""));
 
+        //执行以下命令 getconf PAGESIZE
         ShellCommandExecutor shellExecutorPage = new ShellCommandExecutor(
             new String[] { "getconf", "PAGESIZE" });
         shellExecutorPage.execute();
@@ -131,13 +134,15 @@ public class ProcfsBasedProcessTree extends ResourceCalculatorProcessTree {
 
   // to enable testing, using this variable which can be configured
   // to a test directory.
-  private String procfsDir;
+  private String procfsDir;//默认是/proc/
 
   static private String deadPid = "-1";
-  private String pid = deadPid;
+  private String pid = deadPid;//进程ID
+  //进程ID的正则表达式
   static private Pattern numberPattern = Pattern.compile("[1-9][0-9]*");
   private Long cpuTime = 0L;
 
+  //仅仅存储跟本进程相关的所有进程,即本进程以及所有的子进程信息
   protected Map<String, ProcessInfo> processTree =
     new HashMap<String, ProcessInfo>();
 
@@ -166,7 +171,7 @@ public class ProcfsBasedProcessTree extends ResourceCalculatorProcessTree {
    */
   public ProcfsBasedProcessTree(String pid, String procfsDir) {
     super(pid);
-    this.pid = getValidPID(pid);
+    this.pid = getValidPID(pid);//校验并且获取进程ID
     this.procfsDir = procfsDir;
   }
 
@@ -174,6 +179,7 @@ public class ProcfsBasedProcessTree extends ResourceCalculatorProcessTree {
    * Checks if the ProcfsBasedProcessTree is available on this system.
    *
    * @return true if ProcfsBasedProcessTree is available. False otherwise.
+   * 只有linux平台可以使用该类
    */
   public static boolean isAvailable() {
     try {
@@ -192,67 +198,73 @@ public class ProcfsBasedProcessTree extends ResourceCalculatorProcessTree {
   /**
    * Update process-tree with latest state. If the root-process is not alive,
    * tree will be empty.
-   *
+   * 更新跟本进程相关的子子孙孙进程信息
    */
   @Override
   public void updateProcessTree() {
     if (!pid.equals(deadPid)) {
-      // Get the list of processes
+      // Get the list of processes 返回进程文件夹全路径集合,例如1002
       List<String> processList = getProcessList();
 
+      //保存所有的进程号以及解析后的进程对象
       Map<String, ProcessInfo> allProcessInfo = new HashMap<String, ProcessInfo>();
 
       // cache the processTree to get the age for processes
+      //复制老版本的信息
       Map<String, ProcessInfo> oldProcs =
               new HashMap<String, ProcessInfo>(processTree);
+      //清空原有数据
       processTree.clear();
 
-      ProcessInfo me = null;
+      ProcessInfo me = null;//该进程本身对应的进程对象
       for (String proc : processList) {
         // Get information for each process
         ProcessInfo pInfo = new ProcessInfo(proc);
-        if (constructProcessInfo(pInfo, procfsDir) != null) {
+        if (constructProcessInfo(pInfo, procfsDir) != null) {//读取读取/proc/11132/stat文件文件,将该进程的信息内容填充到ProcessInfo对象中
           allProcessInfo.put(proc, pInfo);
-          if (proc.equals(this.pid)) {
+          if (proc.equals(this.pid)) {//获取该进程本身对应的进程对象
             me = pInfo; // cache 'me'
             processTree.put(proc, pInfo);
           }
         }
       }
 
+      //没有找到进程对象,不应该
       if (me == null) {
         return;
       }
 
       // Add each process to its parent.
+      //循环所有的进程信息,这一步仅仅填充该进程有哪些子进程
       for (Map.Entry<String, ProcessInfo> entry : allProcessInfo.entrySet()) {
         String pID = entry.getKey();
         if (!pID.equals("1")) {
           ProcessInfo pInfo = entry.getValue();
-          ProcessInfo parentPInfo = allProcessInfo.get(pInfo.getPpid());
+          ProcessInfo parentPInfo = allProcessInfo.get(pInfo.getPpid());//父进程ID
           if (parentPInfo != null) {
-            parentPInfo.addChild(pInfo);
+            parentPInfo.addChild(pInfo);//为父进程ID添加子进程
           }
         }
       }
 
-      // now start constructing the process-tree
+      // now start constructing the process-tree 添加本进程下所有的子进程
       LinkedList<ProcessInfo> pInfoQueue = new LinkedList<ProcessInfo>();
       pInfoQueue.addAll(me.getChildren());
-      while (!pInfoQueue.isEmpty()) {
+      while (!pInfoQueue.isEmpty()) {//循环所有的子进程
         ProcessInfo pInfo = pInfoQueue.remove();
-        if (!processTree.containsKey(pInfo.getPid())) {
+        if (!processTree.containsKey(pInfo.getPid())) {//添加所有的子进程信息
           processTree.put(pInfo.getPid(), pInfo);
         }
-        pInfoQueue.addAll(pInfo.getChildren());
+        pInfoQueue.addAll(pInfo.getChildren());//将子进程的所有子进程再依次添加进来
       }
 
       // update age values and compute the number of jiffies since last update
+      //循环所有跟本进程相关的子子孙孙进程,更新这些进程信息
       for (Map.Entry<String, ProcessInfo> procs : processTree.entrySet()) {
         ProcessInfo oldInfo = oldProcs.get(procs.getKey());
         if (procs.getValue() != null) {
           procs.getValue().updateJiffy(oldInfo);
-          if (oldInfo != null) {
+          if (oldInfo != null) {//更新老进程的年龄
             procs.getValue().updateAge(oldInfo);
           }
         }
@@ -285,6 +297,9 @@ public class ProcfsBasedProcessTree extends ResourceCalculatorProcessTree {
     return checkPidPgrpidForMatch(pid, PROCFS);
   }
 
+  /**
+   * 读取 /proc/11132/stat文件,校验进程ID与组ID是否一致,true表示一致
+   */
   public static boolean checkPidPgrpidForMatch(String _pid, String procfs) {
     // Get information for this process
     ProcessInfo pInfo = new ProcessInfo(_pid);
@@ -299,6 +314,9 @@ public class ProcfsBasedProcessTree extends ResourceCalculatorProcessTree {
   private static final String PROCESSTREE_DUMP_FORMAT =
       "\t|- %s %s %d %d %s %d %d %d %d %s\n";
 
+  /**
+   * 获取该进程相关的所有子孙进程集合
+   */
   public List<String> getCurrentProcessIDs() {
     List<String> currentPIDs = new ArrayList<String>();
     currentPIDs.addAll(processTree.keySet());
@@ -310,6 +328,7 @@ public class ProcfsBasedProcessTree extends ResourceCalculatorProcessTree {
    *
    * @return a string concatenating the dump of information of all the processes
    *         in the process-tree
+   *  打印进程相关信息       
    */
   @Override
   public String getProcessTreeDump() {
@@ -337,6 +356,7 @@ public class ProcfsBasedProcessTree extends ResourceCalculatorProcessTree {
    *                      memory addition
    * @return cumulative virtual memory used by the process-tree in bytes,
    *          for processes older than this age.
+   * 计算大于olderThanAge年龄的子孙进程所占用的虚拟内存总和
    */
   @Override
   public long getCumulativeVmem(int olderThanAge) {
@@ -445,6 +465,7 @@ public class ProcfsBasedProcessTree extends ResourceCalculatorProcessTree {
     return cpuTime;
   }
 
+  //校验进程id是否合法
   private static String getValidPID(String pid) {
     if (pid == null) return deadPid;
     Matcher m = numberPattern.matcher(pid);
@@ -454,11 +475,14 @@ public class ProcfsBasedProcessTree extends ResourceCalculatorProcessTree {
 
   /**
    * Get the list of all processes in the system.
+   * 返回进程文件夹全路径集合,例如1002
    */
   private List<String> getProcessList() {
+	 //查找/proc下所有的文件夹
     String[] processDirs = (new File(procfsDir)).list();
     List<String> processList = new ArrayList<String>();
 
+    //过滤,最终只要进程文件夹
     for (String dir : processDirs) {
       Matcher m = numberPattern.matcher(dir);
       if (!m.matches()) continue;
@@ -483,6 +507,7 @@ public class ProcfsBasedProcessTree extends ResourceCalculatorProcessTree {
    * @param pinfo ProcessInfo that needs to be updated
    * @param procfsDir root of the proc file system
    * @return updated ProcessInfo, null on errors.
+   * 读取读取/proc/11132/stat文件文件,将该进程的信息内容填充到ProcessInfo对象中
    */
   private static ProcessInfo constructProcessInfo(ProcessInfo pinfo,
                                                     String procfsDir) {
@@ -492,6 +517,7 @@ public class ProcfsBasedProcessTree extends ResourceCalculatorProcessTree {
     FileReader fReader = null;
     try {
       File pidDir = new File(procfsDir, pinfo.getPid());
+      //读取/proc/11132/stat文件
       fReader = new FileReader(new File(pidDir, PROCFS_STAT_FILE));
       in = new BufferedReader(fReader);
     } catch (FileNotFoundException f) {
@@ -551,20 +577,20 @@ public class ProcfsBasedProcessTree extends ResourceCalculatorProcessTree {
   /**
    *
    * Class containing information of a process.
-   *
+   * 代表一个进程对象
    */
   private static class ProcessInfo {
-    private String pid; // process-id
+    private String pid; // process-id 进程ID
     private String name; // command name
-    private Integer pgrpId; // process group-id
-    private String ppid; // parent process-id
+    private Integer pgrpId; // process group-id 组ID,即是否在同一个组下
+    private String ppid; // parent process-id 父进程ID
     private Integer sessionId; // session-id
     private Long vmem; // virtual memory usage
     private Long rssmemPage; // rss memory usage in # of pages
     private Long utime = 0L; // # of jiffies in user mode
     private final BigInteger MAX_LONG = BigInteger.valueOf(Long.MAX_VALUE);
     private BigInteger stime = new BigInteger("0"); // # of jiffies in kernel mode
-    // how many times has this process been seen alive
+    // how many times has this process been seen alive 年龄,表示多少次了,进程依然存活
     private int age;
 
     // # of jiffies used since last update:
@@ -573,7 +599,7 @@ public class ProcfsBasedProcessTree extends ResourceCalculatorProcessTree {
     // We need this to compute the cumulative CPU time
     // because the subprocess may finish earlier than root process
 
-    private List<ProcessInfo> children = new ArrayList<ProcessInfo>(); // list of children
+    private List<ProcessInfo> children = new ArrayList<ProcessInfo>(); // list of children该进程的所有一级子进程
 
     public ProcessInfo(String pid) {
       this.pid = pid;
@@ -665,6 +691,9 @@ public class ProcfsBasedProcessTree extends ResourceCalculatorProcessTree {
       return children;
     }
 
+    /**
+     * 读取/proc/11132/cmdline文件内容,即该进程对应的命令
+     */
     public String getCmdLine(String procfsDir) {
       String ret = "N/A";
       if (pid == null) {

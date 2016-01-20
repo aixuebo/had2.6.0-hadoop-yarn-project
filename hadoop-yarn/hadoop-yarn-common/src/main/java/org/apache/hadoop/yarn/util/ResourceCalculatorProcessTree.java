@@ -28,7 +28,8 @@ import org.apache.hadoop.conf.Configured;
 
 /**
  * Interface class to obtain process resource usage
- *
+ * 实现类ProcfsBasedProcessTree
+ * 计算该构造函数对应的进程的所有子孙进程统计之和
  */
 @Private
 public abstract class ResourceCalculatorProcessTree extends Configured {
@@ -39,7 +40,7 @@ public abstract class ResourceCalculatorProcessTree extends Configured {
    * Create process-tree instance with specified root process.
    *
    * Subclass must override this.
-   * @param root process-tree root-process
+   * @param root process-tree root-process 进程ID
    */
   public ResourceCalculatorProcessTree(String root) {
   }
@@ -50,7 +51,7 @@ public abstract class ResourceCalculatorProcessTree extends Configured {
    * Each call to this function should increment the age of the running
    * processes that already exist in the process tree. Age is used other API's
    * of the interface.
-   *
+   * 更新进程统计信息
    */
   public abstract void updateProcessTree();
 
@@ -59,6 +60,7 @@ public abstract class ResourceCalculatorProcessTree extends Configured {
    *
    * @return a string concatenating the dump of information of all the processes
    *         in the process-tree
+   * 打印该进程的所有子孙进程的进程树
    */
   public abstract String getProcessTreeDump();
 
@@ -67,6 +69,7 @@ public abstract class ResourceCalculatorProcessTree extends Configured {
    * process-tree.
    *
    * @return cumulative virtual memory used by the process-tree in bytes.
+   * 计算该进程所使用的所有虚拟内存量
    */
   public long getCumulativeVmem() {
     return getCumulativeVmem(0);
@@ -78,6 +81,7 @@ public abstract class ResourceCalculatorProcessTree extends Configured {
    *
    * @return cumulative rss memory used by the process-tree in bytes. return 0
    *         if it cannot be calculated
+   * 计算该进程所使用的所有rss内存量
    */
   public long getCumulativeRssmem() {
     return getCumulativeRssmem(0);
@@ -131,6 +135,7 @@ public abstract class ResourceCalculatorProcessTree extends Configured {
    *
    * @return ResourceCalculatorProcessTree or null if ResourceCalculatorPluginTree
    *         is not available for this system.
+   * 单例方法创建实例类
    */
   public static ResourceCalculatorProcessTree getResourceCalculatorProcessTree(
     String pid, Class<? extends ResourceCalculatorProcessTree> clazz, Configuration conf) {

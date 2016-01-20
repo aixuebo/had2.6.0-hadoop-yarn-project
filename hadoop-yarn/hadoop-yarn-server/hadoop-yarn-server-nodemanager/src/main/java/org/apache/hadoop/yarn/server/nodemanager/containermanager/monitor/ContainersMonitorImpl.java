@@ -43,6 +43,9 @@ import org.apache.hadoop.yarn.util.ResourceCalculatorPlugin;
 
 import com.google.common.base.Preconditions;
 
+/**
+ * 主要监控创造所有的容器过程中,是否对这台节点的物理内存、虚拟内存、cpu数量进行过量的负载
+ */
 public class ContainersMonitorImpl extends AbstractService implements ContainersMonitor{
     
   final static Log LOG = LogFactory.getLog(ContainersMonitorImpl.class);
@@ -50,24 +53,25 @@ public class ContainersMonitorImpl extends AbstractService implements Containers
   private long monitoringInterval;//监听间隔
   private MonitoringThread monitoringThread;//监听线程
 
-  final List<ContainerId> containersToBeRemoved;
-  final Map<ContainerId, ProcessTreeInfo> containersToBeAdded;
-  Map<ContainerId, ProcessTreeInfo> trackingContainers = new HashMap<ContainerId, ProcessTreeInfo>();
+  final List<ContainerId> containersToBeRemoved;//容器不需要被监控的时候,添加到这个集合中,还尚未被监控
+  final Map<ContainerId, ProcessTreeInfo> containersToBeAdded;//容器需要被监控的时候,添加到这个集合中,还尚未被监控
+  Map<ContainerId, ProcessTreeInfo> trackingContainers = new HashMap<ContainerId, ProcessTreeInfo>();//目前已经被监控起来的容器
 
   final ContainerExecutor containerExecutor;
   private final Dispatcher eventDispatcher;
   private final Context context;
-  private ResourceCalculatorPlugin resourceCalculatorPlugin;//单节点计算物理内存、虚拟内存等接口
+  private ResourceCalculatorPlugin resourceCalculatorPlugin;//单节点计算物理内存、虚拟内存等接口,实现类是LinuxResourceCalculatorPlugin
+  private Class<? extends ResourceCalculatorProcessTree> processTreeClass;//进程处理器,实现类ProcfsBasedProcessTree
+  
   private Configuration conf;
-  private Class<? extends ResourceCalculatorProcessTree> processTreeClass;//进程处理器
 
-  private long maxVmemAllottedForContainers = UNKNOWN_MEMORY_LIMIT;//每个容器的最大值
-  private long maxPmemAllottedForContainers = UNKNOWN_MEMORY_LIMIT;//每个容器的最大值
-
-  private boolean pmemCheckEnabled;
-  private boolean vmemCheckEnabled;
-
+  //所有被监控的容器最多可以使用机器的多少物理内存、多少虚拟内存、多少CPU,不过目前这三个指标没有被源代码使用
+  private long maxVmemAllottedForContainers = UNKNOWN_MEMORY_LIMIT;
+  private long maxPmemAllottedForContainers = UNKNOWN_MEMORY_LIMIT;
   private long maxVCoresAllottedForContainers;
+  
+  private boolean pmemCheckEnabled;//true表示要校验物理内存,如果为全部容器分配的物理内存,超过了总物理内存的80%,则要发出警告日志
+  private boolean vmemCheckEnabled;//true表示要校验虚拟内存
 
   private static final long UNKNOWN_MEMORY_LIMIT = -1L;
 
@@ -101,6 +105,7 @@ public class ContainersMonitorImpl extends AbstractService implements Containers
     LOG.info(" Using ResourceCalculatorProcessTree : "
         + this.processTreeClass);
 
+    
     long configuredPMemForContainers = conf.getLong(
         YarnConfiguration.NM_PMEM_MB,
         YarnConfiguration.DEFAULT_NM_PMEM_MB) * 1024 * 1024l;
@@ -119,6 +124,8 @@ public class ContainersMonitorImpl extends AbstractService implements Containers
     // ///////// Virtual memory configuration //////
     float vmemRatio = conf.getFloat(YarnConfiguration.NM_VMEM_PMEM_RATIO,
         YarnConfiguration.DEFAULT_NM_VMEM_PMEM_RATIO);
+    
+    //校验,不允许大于0.99
     Preconditions.checkArgument(vmemRatio > 0.99f,
         YarnConfiguration.NM_VMEM_PMEM_RATIO + " should be at least 1.0");
     this.maxVmemAllottedForContainers =
@@ -131,11 +138,15 @@ public class ContainersMonitorImpl extends AbstractService implements Containers
     LOG.info("Physical memory check enabled: " + pmemCheckEnabled);
     LOG.info("Virtual memory check enabled: " + vmemCheckEnabled);
 
+    /**
+     * 如果要校验物理内存,则进行校验
+     * 如果为全部容器分配的物理内存,超过了总物理内存的80%,则要发出警告日志
+     */
     if (pmemCheckEnabled) {
       // Logging if actual pmem cannot be determined.
-      long totalPhysicalMemoryOnNM = UNKNOWN_MEMORY_LIMIT;
+      long totalPhysicalMemoryOnNM = UNKNOWN_MEMORY_LIMIT;//获取该节点的总内存
       if (this.resourceCalculatorPlugin != null) {
-        totalPhysicalMemoryOnNM = this.resourceCalculatorPlugin.getPhysicalMemorySize();
+        totalPhysicalMemoryOnNM = this.resourceCalculatorPlugin.getPhysicalMemorySize();//获取该节点的总内存
         if (totalPhysicalMemoryOnNM <= 0) {
           LOG.warn("NodeManager's totalPmem could not be calculated. "
               + "Setting it to " + UNKNOWN_MEMORY_LIMIT);
@@ -143,6 +154,7 @@ public class ContainersMonitorImpl extends AbstractService implements Containers
         }
       }
 
+      //如果为全部容器分配的物理内存,超过了总物理内存的80%,则要发出警告日志
       if (totalPhysicalMemoryOnNM != UNKNOWN_MEMORY_LIMIT &&
           this.maxPmemAllottedForContainers > totalPhysicalMemoryOnNM * 0.80f) {
         LOG.warn("NodeManager configured with "
@@ -201,12 +213,15 @@ public class ContainersMonitorImpl extends AbstractService implements Containers
     super.serviceStop();
   }
 
+  /**
+   * 每一个被监控的容器,对应一个该对象
+   */
   private static class ProcessTreeInfo {
-    private ContainerId containerId;
-    private String pid;
-    private ResourceCalculatorProcessTree pTree;
-    private long vmemLimit;
-    private long pmemLimit;
+    private ContainerId containerId;//容器ID
+    private String pid;//该容器所在进程ID
+    private ResourceCalculatorProcessTree pTree;//该容器所在进程对应的所有子孙进程的统计信息
+    private long vmemLimit;//存储该容器需要被限制的虚拟内存
+    private long pmemLimit;//存储该容器需要被限制的物理内存
 
     public ProcessTreeInfo(ContainerId containerId, String pid,
         ResourceCalculatorProcessTree pTree, long vmemLimit, long pmemLimit) {
@@ -268,17 +283,18 @@ public class ContainersMonitorImpl extends AbstractService implements Containers
    * is given the benefit of doubt to lie around for one more iteration.
    *
    * @param containerId
-   *          Container Id for the container tree
+   *          Container Id for the container tree 容器ID
    * @param currentMemUsage
-   *          Memory usage of a container tree
+   *          Memory usage of a container tree 当前容器使用的虚拟/物理内存量
    * @param curMemUsageOfAgedProcesses
    *          Memory usage of processes older than an iteration in a container
-   *          tree
+   *          tree 当前容器使用超过1岁的虚拟/物理内存量
    * @param vmemLimit
-   *          The limit specified for the container
+   *          The limit specified for the container 虚拟/物理内存设置的限制
    * @return true if the memory usage is more than twice the specified limit,
    *         or if processes in the tree, older than this thread's monitoring
    *         interval, exceed the memory limit. False, otherwise.
+   * true,说明当前进程已经超出限制了
    */
   boolean isProcessTreeOverLimit(String containerId,
                                   long currentMemUsage,
@@ -286,12 +302,13 @@ public class ContainersMonitorImpl extends AbstractService implements Containers
                                   long vmemLimit) {
     boolean isOverLimit = false;
 
+    //超过了两倍,一定是超量了
     if (currentMemUsage > (2 * vmemLimit)) {
       LOG.warn("Process tree for container: " + containerId
           + " running over twice " + "the configured limit. Limit=" + vmemLimit
           + ", current usage = " + currentMemUsage);
       isOverLimit = true;
-    } else if (curMemUsageOfAgedProcesses > vmemLimit) {
+    } else if (curMemUsageOfAgedProcesses > vmemLimit) {//一岁的内存量都超量了,也肯定结果是超量了
       LOG.warn("Process tree for container: " + containerId
           + " has processes older than 1 "
           + "iteration running over the configured limit. Limit=" + vmemLimit
@@ -302,7 +319,7 @@ public class ContainersMonitorImpl extends AbstractService implements Containers
     return isOverLimit;
   }
 
-  // method provided just for easy testing purposes
+  // method provided just for easy testing purposes 用于测试
   boolean isProcessTreeOverLimit(ResourceCalculatorProcessTree pTree,
       String containerId, long limit) {
     long currentMemUsage = pTree.getCumulativeVmem();
@@ -313,6 +330,9 @@ public class ContainersMonitorImpl extends AbstractService implements Containers
                                   curMemUsageOfAgedProcesses, limit);
   }
 
+  /**
+   * 定时进行监控
+   */
   private class MonitoringThread extends Thread {
     public MonitoringThread() {
       super("Container Monitor");
@@ -323,7 +343,7 @@ public class ContainersMonitorImpl extends AbstractService implements Containers
 
       while (true) {
 
-        // Print the processTrees for debugging.
+        // Print the processTrees for debugging.打印目前已经被监控起来的容器进程信息
         if (LOG.isDebugEnabled()) {
           StringBuilder tmp = new StringBuilder("[ ");
           for (ProcessTreeInfo p : trackingContainers.values()) {
@@ -333,46 +353,51 @@ public class ContainersMonitorImpl extends AbstractService implements Containers
           LOG.debug("Current ProcessTree list : "+ tmp.substring(0, tmp.length()) + "]");
         }
 
-        // Add new containers
+        // Add new containers 操作刚刚被添加的需要被监控的容器
         synchronized (containersToBeAdded) {
           for (Entry<ContainerId, ProcessTreeInfo> entry : containersToBeAdded.entrySet()) {
-            ContainerId containerId = entry.getKey();
-            ProcessTreeInfo processTreeInfo = entry.getValue();
+            ContainerId containerId = entry.getKey();//容器ID
+            ProcessTreeInfo processTreeInfo = entry.getValue();//容器ID对应的对象
             LOG.info("Starting resource-monitoring for " + containerId);
+            //将其添加到监控队列中
             trackingContainers.put(containerId, processTreeInfo);
           }
-          containersToBeAdded.clear();
+          containersToBeAdded.clear();//清空
         }
 
-        // Remove finished containers
+        // Remove finished containers 操作容器不需要被监控的容器
         synchronized (containersToBeRemoved) {
           for (ContainerId containerId : containersToBeRemoved) {
+        	//将其从监控队列中移除
             trackingContainers.remove(containerId);
             LOG.info("Stopping resource-monitoring for " + containerId);
           }
-          containersToBeRemoved.clear();
+          containersToBeRemoved.clear();//清空
         }
 
+        //现在处理处于监控中的容器,循环每一个被监控的容器
         // Now do the monitoring for the trackingContainers
         // Check memory usage and kill any overflowing containers
-        long vmemStillInUsage = 0;
-        long pmemStillInUsage = 0;
+        long vmemStillInUsage = 0;//总共所有容器使用的虚拟内存大小
+        long pmemStillInUsage = 0;//总共所有容器使用的物理内存大小
         for (Iterator<Map.Entry<ContainerId, ProcessTreeInfo>> it = trackingContainers.entrySet().iterator(); it.hasNext();) {
           Map.Entry<ContainerId, ProcessTreeInfo> entry = it.next();
-          ContainerId containerId = entry.getKey();
-          ProcessTreeInfo ptInfo = entry.getValue();
+          ContainerId containerId = entry.getKey();//容器ID
+          ProcessTreeInfo ptInfo = entry.getValue();//每一个容器对应的一个对象
           try {
-            String pId = ptInfo.getPID();
+            String pId = ptInfo.getPID();//该容器所在的进程ID
 
             // Initialize any uninitialized processTrees
             if (pId == null) {
               // get pid from ContainerId
-              pId = containerExecutor.getProcessId(ptInfo.getContainerId());
+              pId = containerExecutor.getProcessId(ptInfo.getContainerId());//根据容器ID,获取该容器的进程ID,因为每一个容器已经把对应的进程写入到一个文件中了
               if (pId != null) {
                 // pId will be null, either if the container is not spawned yet
                 // or if the container's pid is removed from ContainerExecutor
+            	//打印日志,表示第一次跟踪该进程
                 LOG.debug("Tracking ProcessTree " + pId
                     + " for the first time");
+                //创建该进程对应的子孙进程的统计对象
                 ResourceCalculatorProcessTree pt = ResourceCalculatorProcessTree.getResourceCalculatorProcessTree(pId, processTreeClass, conf);
                 ptInfo.setPid(pId);
                 ptInfo.setProcessTree(pt);
@@ -387,23 +412,28 @@ public class ContainersMonitorImpl extends AbstractService implements Containers
             LOG.debug("Constructing ProcessTree for : PID = " + pId
                 + " ContainerId = " + containerId);
             ResourceCalculatorProcessTree pTree = ptInfo.getProcessTree();
-            pTree.updateProcessTree();    // update process-tree
-            long currentVmemUsage = pTree.getCumulativeVmem();
-            long currentPmemUsage = pTree.getCumulativeRssmem();
+            pTree.updateProcessTree();    // update process-tree 更新该进程的子孙进程信息
+            long currentVmemUsage = pTree.getCumulativeVmem();//当前进程所有子孙进程,使用的虚拟内存总量
+            long currentPmemUsage = pTree.getCumulativeRssmem();//当前进程所有子孙进程,使用的物理内存总量
             // as processes begin with an age 1, we want to see if there
             // are processes more than 1 iteration old.
             long curMemUsageOfAgedProcesses = pTree.getCumulativeVmem(1);
             long curRssMemUsageOfAgedProcesses = pTree.getCumulativeRssmem(1);
+            
+            //获取容器设置的限制
             long vmemLimit = ptInfo.getVmemLimit();
             long pmemLimit = ptInfo.getPmemLimit();
+            
+            //打印当前进程,已经使用的和设置上限的虚拟、物理内存的信息
             LOG.info(String.format(
                 "Memory usage of ProcessTree %s for container-id %s: ",
                      pId, containerId.toString()) +
                 formatUsageString(currentVmemUsage, vmemLimit, currentPmemUsage, pmemLimit));
 
-            boolean isMemoryOverLimit = false;
+            boolean isMemoryOverLimit = false;//true表示内存已经超出限制
             String msg = "";
             int containerExitStatus = ContainerExitStatus.INVALID;
+            //如果校验虚拟内存,并且虚拟内存超限了
             if (isVmemCheckEnabled()
                 && isProcessTreeOverLimit(containerId.toString(),
                     currentVmemUsage, curMemUsageOfAgedProcesses, vmemLimit)) {
@@ -414,12 +444,12 @@ public class ContainersMonitorImpl extends AbstractService implements Containers
                   currentVmemUsage, vmemLimit,
                   currentPmemUsage, pmemLimit,
                   pId, containerId, pTree);
-              isMemoryOverLimit = true;
+              isMemoryOverLimit = true;//超出限制标示
               containerExitStatus = ContainerExitStatus.KILLED_EXCEEDED_VMEM;
             } else if (isPmemCheckEnabled()
                 && isProcessTreeOverLimit(containerId.toString(),
                     currentPmemUsage, curRssMemUsageOfAgedProcesses,
-                    pmemLimit)) {
+                    pmemLimit)) {//如果物理内存也要检查
               // Container (the root process) is still alive and overflowing
               // memory.
               // Dump the process-tree and then clean it up.
@@ -427,11 +457,11 @@ public class ContainersMonitorImpl extends AbstractService implements Containers
                   currentVmemUsage, vmemLimit,
                   currentPmemUsage, pmemLimit,
                   pId, containerId, pTree);
-              isMemoryOverLimit = true;
+              isMemoryOverLimit = true;//物理内存超量了
               containerExitStatus = ContainerExitStatus.KILLED_EXCEEDED_PMEM;
             }
 
-            if (isMemoryOverLimit) {
+            if (isMemoryOverLimit) {//如果内存超出了限制
               // Virtual or physical memory over limit. Fail the container and
               // remove
               // the corresponding process tree
@@ -441,16 +471,18 @@ public class ContainersMonitorImpl extends AbstractService implements Containers
                 LOG.error("Killed container process with PID " + pId
                     + " but it is not a process group leader.");
               }
-              // kill the container
+              // kill the container 杀死该容器
               eventDispatcher.getEventHandler().handle(
                   new ContainerKillEvent(containerId,
                       containerExitStatus, msg));
+              //并且从监控队列中移除该容器
               it.remove();
               LOG.info("Removed ProcessTree with root " + pId);
-            } else {
+            } else {//如果内存尚未超出限制
               // Accounting the total memory in usage for all containers that
               // are still
               // alive and within limits.
+              //仅仅累加使用量
               vmemStillInUsage += currentVmemUsage;
               pmemStillInUsage += currentPmemUsage;
             }
@@ -461,6 +493,7 @@ public class ContainersMonitorImpl extends AbstractService implements Containers
           }
         }
 
+        //休息一定时间间隔
         try {
           Thread.sleep(monitoringInterval);
         } catch (InterruptedException e) {
@@ -486,6 +519,14 @@ public class ContainersMonitorImpl extends AbstractService implements Containers
         pTree.getProcessTreeDump();
     }
 
+    /**
+     * 打印当前进程所使用的物理内存和虚拟内存使用量,以及当前进程所在容器对虚拟内存和物理内存的限制
+     * @param currentVmemUsage 当前使用虚拟内存量
+     * @param vmemLimit 当前容器的虚拟内存限制量
+     * @param currentPmemUsage 当前使用物理内存量
+     * @param pmemLimit 当前容器的物理内存限制量
+     * @return
+     */
     private String formatUsageString(long currentVmemUsage, long vmemLimit,
         long currentPmemUsage, long pmemLimit) {
       return String.format("%sB of %sB physical memory used; " +
@@ -544,7 +585,7 @@ public class ContainersMonitorImpl extends AbstractService implements Containers
     case START_MONITORING_CONTAINER:
       ContainerStartMonitoringEvent startEvent =
           (ContainerStartMonitoringEvent) monitoringEvent;
-      synchronized (this.containersToBeAdded) {
+      synchronized (this.containersToBeAdded) {//容器需要被监控的时候,添加到这个集合中
         ProcessTreeInfo processTreeInfo =
             new ProcessTreeInfo(containerId, null, null,
                 startEvent.getVmemLimit(), startEvent.getPmemLimit());
@@ -553,7 +594,7 @@ public class ContainersMonitorImpl extends AbstractService implements Containers
       break;
     case STOP_MONITORING_CONTAINER:
       synchronized (this.containersToBeRemoved) {
-        this.containersToBeRemoved.add(containerId);
+        this.containersToBeRemoved.add(containerId);//容器不需要被监控的时候,添加到这个集合中
       }
       break;
     default:

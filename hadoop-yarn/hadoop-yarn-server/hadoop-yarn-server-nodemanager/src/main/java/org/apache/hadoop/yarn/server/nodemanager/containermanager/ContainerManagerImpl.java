@@ -194,13 +194,12 @@ public class ContainerManagerImpl extends CompositeService implements
     this.nodeStatusUpdater = nodeStatusUpdater;
     this.aclsManager = aclsManager;
 
-    // Start configurable services
+    // Start configurable services 加载第三方服务
     auxiliaryServices = new AuxServices();
     auxiliaryServices.registerServiceListener(this);
     addService(auxiliaryServices);
 
     this.containersMonitor = new ContainersMonitorImpl(exec, dispatcher, this.context);
-        
     addService(this.containersMonitor);
 
     dispatcher.register(ContainerEventType.class,new ContainerEventDispatcher());
@@ -256,7 +255,7 @@ public class ContainerManagerImpl extends CompositeService implements
   }
 
   /**
-   * 恢复一个应用,从新初始化该应用
+   * 恢复一个应用,重新初始化该应用
    */
   private void recoverApplication(ContainerManagerApplicationProto p) throws IOException {
     ApplicationId appId = new ApplicationIdPBImpl(p.getId());
@@ -281,7 +280,7 @@ public class ContainerManagerImpl extends CompositeService implements
   }
 
   /**
-   * 恢复一个容器,从新初始化该容器
+   * 恢复一个容器,重新初始化该容器
    */
   @SuppressWarnings("unchecked")
   private void recoverContainer(RecoveredContainerState rcs) throws IOException {

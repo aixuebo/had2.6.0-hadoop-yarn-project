@@ -49,11 +49,13 @@ public class ContainerExitStatus {
 
   /**
    * Container terminated because of exceeding allocated virtual memory.
+   * 容器使用的虚拟内存已经超出设置的限制
    */
   public static final int KILLED_EXCEEDED_VMEM = -103;
 
   /**
    * Container terminated because of exceeding allocated physical memory.
+   * 容器使用的物理内存已经超出设置的限制
    */
   public static final int KILLED_EXCEEDED_PMEM = -104;
 

@@ -27,6 +27,8 @@ import org.apache.hadoop.service.CompositeService;
  * report.
  * 从脚本和磁盘两个角度去检查是否健康
  * 脚本是自己写的，磁盘是程序默认的
+ * 
+ * Node节点的健康检查服务,是一个组合服务,提供检查磁盘的服务以及可能提供脚本检查的服务
  */
 public class NodeHealthCheckerService extends CompositeService {
 
@@ -52,6 +54,7 @@ public class NodeHealthCheckerService extends CompositeService {
 
   /**
    * @return the reporting string of health of the node
+   * 打印健康状况信息
    */
   String getHealthReport() {
     String scriptReport = (nodeHealthScriptRunner == null) ? ""
@@ -65,6 +68,7 @@ public class NodeHealthCheckerService extends CompositeService {
 
   /**
    * @return <em>true</em> if the node is healthy
+   * 是否健康 
    */
   boolean isHealthy() {
     boolean scriptHealthStatus = (nodeHealthScriptRunner == null) ? true
@@ -74,6 +78,7 @@ public class NodeHealthCheckerService extends CompositeService {
 
   /**
    * @return when the last time the node health status is reported
+   * 获取最后一次检查时间
    */
   long getLastHealthReportTime() {
     long diskCheckTime = dirsHandler.getLastDisksCheckTime();
@@ -85,6 +90,7 @@ public class NodeHealthCheckerService extends CompositeService {
 
   /**
    * @return the disk handler
+   * 返回磁盘检查服务
    */
   public LocalDirsHandlerService getDiskHandler() {
     return dirsHandler;
@@ -92,6 +98,7 @@ public class NodeHealthCheckerService extends CompositeService {
 
   /**
    * @return the node health script runner
+   * 返回脚本检查服务
    */
   NodeHealthScriptRunner getNodeHealthScriptRunner() {
     return nodeHealthScriptRunner;

@@ -48,23 +48,28 @@ import org.apache.hadoop.yarn.server.nodemanager.util.DefaultLCEResourcesHandler
 import org.apache.hadoop.yarn.server.nodemanager.util.LCEResourcesHandler;
 import org.apache.hadoop.yarn.util.ConverterUtils;
 
+/**
+ * 在linux平台上如何执行一个Container容器
+ */
 public class LinuxContainerExecutor extends ContainerExecutor {
 
   private static final Log LOG = LogFactory.getLog(LinuxContainerExecutor.class);
 
-  private String nonsecureLocalUser;
-  private Pattern nonsecureLocalUserPattern;//正则表达式,匹配该正则表达式的user,可以使用
-  private String containerExecutorExe;//找到container-executor可执行文件路径
+  private String containerExecutorExe;//找到/hadoop/bin/container-executor可执行文件理路径
   private LCEResourcesHandler resourcesHandler;//容器的资源拦截器,拦截容器执行前、后的处理
+  
   private boolean containerSchedPriorityIsSet = false;//true表示允许该容器设置优先级
   private int containerSchedPriorityAdjustment = 0;//设置优先级
-  private boolean containerLimitUsers = YarnConfiguration.DEFAULT_NM_NONSECURE_MODE_LIMIT_USERS;
+  
+  private String nonsecureLocalUser;
+  private Pattern nonsecureLocalUserPattern;//正则表达式,匹配该正则表达式的user,可以使用
+  private boolean containerLimitUsers = YarnConfiguration.DEFAULT_NM_NONSECURE_MODE_LIMIT_USERS;//false表示不限制调用者
   
   
   @Override
   public void setConf(Configuration conf) {
     super.setConf(conf);
-    //找到container-executor可执行文件路径
+    //找到/hadoop/bin/container-executor可执行文件理路径
     containerExecutorExe = getContainerExecutorExecutablePath(conf);
     
     resourcesHandler = ReflectionUtils.newInstance(
@@ -91,6 +96,9 @@ public class LinuxContainerExecutor extends ContainerExecutor {
       YarnConfiguration.DEFAULT_NM_NONSECURE_MODE_LIMIT_USERS);
   }
 
+  /**
+   * 校验该user是否能够执行该linux命令
+   */
   void verifyUsernamePattern(String user) {
     if (!UserGroupInformation.isSecurityEnabled() &&
         !nonsecureLocalUserPattern.matcher(user).matches()) {
@@ -99,6 +107,9 @@ public class LinuxContainerExecutor extends ContainerExecutor {
       }
   }
 
+  /**
+   * 获取运行该命令的user
+   */
   String getRunAsUser(String user) {
     if (UserGroupInformation.isSecurityEnabled() || !containerLimitUsers) {
       return user;
@@ -150,7 +161,7 @@ public class LinuxContainerExecutor extends ContainerExecutor {
   }
 
   /**
-   * 找到container-executor可执行文件理路径
+   * 找到/hadoop/bin/container-executor可执行文件理路径
    */
   protected String getContainerExecutorExecutablePath(Configuration conf) {
     String yarnHomeEnvVar = System.getenv(ApplicationConstants.Environment.HADOOP_YARN_HOME.key());
@@ -173,7 +184,7 @@ public class LinuxContainerExecutor extends ContainerExecutor {
   }
 
   /**
-   * 执行container-executor --checksetup
+   * 执行container-executor --checksetup命令进行初始化操作
    */
   @Override 
   public void init() throws IOException {
@@ -440,6 +451,9 @@ public class LinuxContainerExecutor extends ContainerExecutor {
     return signalContainer(user, pid, Signal.NULL);
   }
 
+  /**
+   * 执行以下命令 /hadoop/bin/container-executor --mount-cgroups
+   */
   public void mountCgroups(List<String> cgroupKVs, String hierarchy)
          throws IOException {
     List<String> command = new ArrayList<String>(

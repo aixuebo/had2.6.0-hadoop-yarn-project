@@ -415,13 +415,14 @@ public class NodeStatusUpdaterImpl extends AbstractService implements
     return runningApplications;
   }
 
-  // These NMContainerStatus are sent on NM registration and used by YARN only.在注册的时候发送一些信息,但是我觉得注册的时候还没有容器呢，因此不太理解为什么容器还要循环,难道是未来还原操作么?
+  // These NMContainerStatus are sent on NM registration and used by YARN only.
+  //在注册的时候发送一些信息,但是我觉得注册的时候还没有容器呢，因此不太理解为什么容器还要循环,难道是未来还原操作么?
   private List<NMContainerStatus> getNMContainerStatuses() throws IOException {
     List<NMContainerStatus> containerStatuses = new ArrayList<NMContainerStatus>();
     for (Container container : this.context.getContainers().values()) {
       ContainerId containerId = container.getContainerId();
       ApplicationId applicationId = container.getContainerId().getApplicationAttemptId().getApplicationId();
-      if (!this.context.getApplications().containsKey(applicationId)) {
+      if (!this.context.getApplications().containsKey(applicationId)) {//已经没有该应用了,则删除该容器
         context.getContainers().remove(containerId);
         continue;
       }
@@ -440,11 +441,10 @@ public class NodeStatusUpdaterImpl extends AbstractService implements
   }
 
   /**
-   * 
    * 判断该应用是否已经停止
    */
   private boolean isApplicationStopped(ApplicationId applicationId) {
-    if (!this.context.getApplications().containsKey(applicationId)) {
+    if (!this.context.getApplications().containsKey(applicationId)) {//没有该应用,则返回true
       return true;
     }
 

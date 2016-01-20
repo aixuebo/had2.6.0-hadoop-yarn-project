@@ -43,7 +43,7 @@ import org.apache.hadoop.yarn.exceptions.YarnRuntimeException;
  * The class which provides functionality of checking the health of the local
  * directories of a node. This specifically manages nodemanager-local-dirs and
  * nodemanager-log-dirs by periodically checking their health.
- * 检查磁盘是否正常服务
+ * 检查磁盘是否正常服务,以及磁盘是否满了
  */
 public class LocalDirsHandlerService extends AbstractService {
 
@@ -56,17 +56,19 @@ public class LocalDirsHandlerService extends AbstractService {
   /**
    * Minimum fraction of disks to be healthy for the node to be healthy in
    * terms of disks. This applies to nm-local-dirs and nm-log-dirs.
-   * 好的目录数量/总的目录数量>minNeededHealthyDisksFactor,则说明该目录不健康
+   * 好的目录数量/总的目录数量>minNeededHealthyDisksFactor,则说明该目录健康
    */
-  private float minNeededHealthyDisksFactor;
+  private float minNeededHealthyDisksFactor;//健康阀值
 
   private MonitoringTimerTask monitoringTimerTask;//每次检查磁盘周期时间
 
-  /** Local dirs to store localized files in 本地所用的数据目录集合*/
-  private DirectoryCollection localDirs = null;
+  /** Local dirs to store localized files in 本地所用的数据目录集合
+   * 主要校验本地多个磁盘,哪个磁盘满了,哪个磁盘异常不可用了,哪些磁盘是正常磁盘 
+   **/
+  private DirectoryCollection localDirs = null;//yarn.nodemanager.local-dirs 本地节点存储数据的路径,用空格和逗号拆分
 
-  /** storage for container logs 本地所用的日志目录集合*/
-  private DirectoryCollection logDirs = null;
+  /** storage for container logs */
+  private DirectoryCollection logDirs = null;//yarn.nodemanager.log-dirs 本地节点存储NodeManager的日志的路径,用空格和逗号拆分
 
   /**
    * Everybody should go through this LocalDirAllocator object for read/write
@@ -94,6 +96,7 @@ public class LocalDirsHandlerService extends AbstractService {
    */
   private final class MonitoringTimerTask extends TimerTask {
 
+	  //初始化要检查的数据目录和NodeManager的日志目录
     public MonitoringTimerTask(Configuration conf) throws YarnRuntimeException {
       float maxUsableSpacePercentagePerDisk =
           conf.getFloat(
@@ -103,11 +106,11 @@ public class LocalDirsHandlerService extends AbstractService {
           conf.getLong(YarnConfiguration.NM_MIN_PER_DISK_FREE_SPACE_MB,
             YarnConfiguration.DEFAULT_NM_MIN_PER_DISK_FREE_SPACE_MB);//每个磁盘最小要保留的空间
       localDirs = new DirectoryCollection(validatePaths(conf.getTrimmedStrings(YarnConfiguration.NM_LOCAL_DIRS)),
-                      maxUsableSpacePercentagePerDisk, minFreeSpacePerDiskMB);
+                      maxUsableSpacePercentagePerDisk, minFreeSpacePerDiskMB);//yarn.nodemanager.local-dirs 本地节点存储数据的路径,用空格和逗号拆分
       logDirs =
           new DirectoryCollection(
             validatePaths(conf.getTrimmedStrings(YarnConfiguration.NM_LOG_DIRS)),
-            maxUsableSpacePercentagePerDisk, minFreeSpacePerDiskMB);
+            maxUsableSpacePercentagePerDisk, minFreeSpacePerDiskMB);//yarn.nodemanager.log-dirs 本地节点存储NodeManager的日志的路径,用空格和逗号拆分
       localDirsAllocator = new LocalDirAllocator(YarnConfiguration.NM_LOCAL_DIRS);
       logDirsAllocator = new LocalDirAllocator(YarnConfiguration.NM_LOG_DIRS);
     }
@@ -148,10 +151,12 @@ public class LocalDirsHandlerService extends AbstractService {
     } catch (IOException e) {
       throw new YarnRuntimeException("Unable to get the local filesystem", e);
     }
+    
+    //创建这些数据目录以及NodeManager的日志目录
     FsPermission perm = new FsPermission((short)0755);
     boolean createSucceeded = localDirs.createNonExistentDirs(localFs, perm);
     createSucceeded &= logDirs.createNonExistentDirs(localFs, perm);
-    if (!createSucceeded) {
+    if (!createSucceeded) {//创建目录失败
       //更新现有的日志目录和数据目录
       updateDirsAfterTest();
     }
@@ -163,6 +168,7 @@ public class LocalDirsHandlerService extends AbstractService {
 
   /**
    * Method used to start the disk health monitoring, if enabled.
+   * 开启定时任务
    */
   @Override
   protected void serviceStart() throws Exception {
@@ -249,6 +255,7 @@ public class LocalDirsHandlerService extends AbstractService {
    *          good dirs or failed dirs
    * @return the health report of nm-local-dirs and nm-log-dirs
    * 打印目前健康的或者非健康的目录信息
+   * 参数true,表示打印健康的磁盘信息,false表示打印异常或者满的磁盘信息
    */
   public String getDisksHealthReport(boolean listGoodDirs) {
     if (!isDiskHealthCheckerEnabled) {
@@ -264,17 +271,17 @@ public class LocalDirsHandlerService extends AbstractService {
     int numLocalDirs = goodLocalDirsList.size() + failedLocalDirsList.size();//总目录数
     int numLogDirs = goodLogDirsList.size() + failedLogDirsList.size();//总目录数
     
-    if (!listGoodDirs) {
-      if (!failedLocalDirsList.isEmpty()) {
+    if (!listGoodDirs) {//打印不好的磁盘目录信息
+      if (!failedLocalDirsList.isEmpty()) {//打印异常或者磁盘满的目录
         report.append(failedLocalDirsList.size() + "/" + numLocalDirs
             + " local-dirs are bad: "
             + StringUtils.join(",", failedLocalDirsList) + "; ");
       }
-      if (!failedLogDirsList.isEmpty()) {
+      if (!failedLogDirsList.isEmpty()) {//打印异常或者磁盘满的目录
         report.append(failedLogDirsList.size() + "/" + numLogDirs
             + " log-dirs are bad: " + StringUtils.join(",", failedLogDirsList));
       }
-    } else {
+    } else {//打印好的磁盘目录信息
       report.append(goodLocalDirsList.size() + "/" + numLocalDirs
           + " local-dirs are good: " + StringUtils.join(",", goodLocalDirsList)
           + "; ");
@@ -295,7 +302,9 @@ public class LocalDirsHandlerService extends AbstractService {
    * @return <em>false</em> if either (a) more than the allowed percentage of
    * nm-local-dirs failed or (b) more than the allowed percentage of
    * nm-log-dirs failed.
-   * 是否健康,好的目录数量/总的目录数量>minNeededHealthyDisksFactor,则说明该目录不健康
+   * 是否健康,好的目录数量/总的目录数量>minNeededHealthyDisksFactor,则说明该目录健康
+   * 
+   * false说明不健康
    */
   public boolean areDisksHealthy() {
     if (!isDiskHealthCheckerEnabled) {
@@ -362,16 +371,19 @@ public class LocalDirsHandlerService extends AbstractService {
   private void checkDirs() {
     //检查正常磁盘数量是否有变化
     boolean disksStatusChange = false;
+    
+    //检查前磁盘坏的情况
     Set<String> failedLocalDirsPreCheck = new HashSet<String>(localDirs.getFailedDirs());
     Set<String> failedLogDirsPreCheck = new HashSet<String>(logDirs.getFailedDirs());
 
-    if (localDirs.checkDirs()) {
+    if (localDirs.checkDirs()) {//true说明经过检查,磁盘好坏的情况有变化
       disksStatusChange = true;
     }
     if (logDirs.checkDirs()) {
       disksStatusChange = true;
     }
 
+    //检查后磁盘坏的情况
     Set<String> failedLocalDirsPostCheck = new HashSet<String>(localDirs.getFailedDirs());
     Set<String> failedLogDirsPostCheck = new HashSet<String>(logDirs.getFailedDirs());
 

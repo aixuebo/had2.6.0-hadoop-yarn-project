@@ -33,12 +33,13 @@ import org.iq80.leveldb.ReadOptions;
 /**
  * A wrapper for a DBIterator to translate the raw RuntimeExceptions that
  * can be thrown into DBExceptions.
+ * 循环迭代DB对象,该对象使用第三方存储一些信息
  */
 @Public
 @Evolving
 public class LeveldbIterator implements Iterator<Map.Entry<byte[], byte[]>>,
                                         Closeable {
-  private DBIterator iter;
+  private DBIterator iter;//迭代器
 
   /**
    * Create an iterator for the specified database
@@ -64,6 +65,7 @@ public class LeveldbIterator implements Iterator<Map.Entry<byte[], byte[]>>,
   /**
    * Repositions the iterator so the key of the next BlockElement
    * returned greater than or equal to the specified targetKey.
+   * 定位到该key位置
    */
   public void seek(byte[] key) throws DBException {
     try {

@@ -46,7 +46,10 @@ public class AsyncDispatcher extends AbstractService implements Dispatcher {
 
   private static final Log LOG = LogFactory.getLog(AsyncDispatcher.class);
 
-  private final BlockingQueue<Event> eventQueue;
+  private final BlockingQueue<Event> eventQueue;//事件队列
+  //每一个事件类型,对应什么类去处理该事件
+  protected final Map<Class<? extends Enum>, EventHandler> eventDispatchers;
+  
   private volatile boolean stopped = false;
 
   // Configuration flag for enabling/disabling draining dispatcher's events on
@@ -55,7 +58,7 @@ public class AsyncDispatcher extends AbstractService implements Dispatcher {
 
   // Indicates all the remaining dispatcher's events on stop have been drained
   // and processed.
-  private volatile boolean drained = true;
+  private volatile boolean drained = true;//true表示事件队列是空
   private Object waitForDrained = new Object();
 
   // For drainEventsOnStop enabled only, block newly coming events into the
@@ -64,7 +67,6 @@ public class AsyncDispatcher extends AbstractService implements Dispatcher {
   private EventHandler handlerInstance = null;
 
   private Thread eventHandlingThread;
-  protected final Map<Class<? extends Enum>, EventHandler> eventDispatchers;
   private boolean exitOnDispatchException;
 
   public AsyncDispatcher() {
@@ -93,6 +95,10 @@ public class AsyncDispatcher extends AbstractService implements Dispatcher {
               }
             }
           }
+          
+          /**
+           * 依次从队列中拿出一个事件,对该事件进行处理
+           */
           Event event;
           try {
             event = eventQueue.take();
@@ -157,6 +163,9 @@ public class AsyncDispatcher extends AbstractService implements Dispatcher {
     super.serviceStop();
   }
 
+  /**
+   * 处理该事件
+   */
   @SuppressWarnings("unchecked")
   protected void dispatch(Event event) {
     //all events go thru this loop
@@ -187,6 +196,9 @@ public class AsyncDispatcher extends AbstractService implements Dispatcher {
     }
   }
 
+  /**
+   * 针对一个事件,注册该事件对应的事件处理器
+   */
   @SuppressWarnings("unchecked")
   @Override
   public void register(Class<? extends Enum> eventType,
@@ -219,9 +231,12 @@ public class AsyncDispatcher extends AbstractService implements Dispatcher {
     return handlerInstance;
   }
 
+  /**
+   * 将事件添加到事件队列中
+   */
   class GenericEventHandler implements EventHandler<Event> {
     public void handle(Event event) {
-      if (blockNewEvents) {
+      if (blockNewEvents) {//true表示新来的事件,将被忽略,不会被执行
         return;
       }
       drained = false;
@@ -251,6 +266,7 @@ public class AsyncDispatcher extends AbstractService implements Dispatcher {
    * Multiplexing an event. Sending it to different handlers that
    * are interested in the event.
    * @param <T> the type of event these multiple handlers are interested in.
+   * 表示一个事件,对应多个事件处理器
    */
   static class MultiListenerHandler implements EventHandler<Event> {
     List<EventHandler<Event>> listofHandlers;
@@ -259,6 +275,9 @@ public class AsyncDispatcher extends AbstractService implements Dispatcher {
       listofHandlers = new ArrayList<EventHandler<Event>>();
     }
 
+    /**
+     * 依次执行该事件处理逻辑
+     */
     @Override
     public void handle(Event event) {
       for (EventHandler<Event> handler: listofHandlers) {

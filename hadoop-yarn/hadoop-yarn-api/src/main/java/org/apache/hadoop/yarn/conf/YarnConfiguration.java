@@ -632,7 +632,9 @@ public class YarnConfiguration extends Configuration {
   /** Keytab for NM.*/
   public static final String NM_KEYTAB = NM_PREFIX + "keytab";
   
-  /**List of directories to store localized files in.*/
+  /**List of directories to store localized files in.
+   * yarn.nodemanager.local-dirs 本地节点存储数据的路径,用空格和逗号拆分
+   **/
   public static final String NM_LOCAL_DIRS = NM_PREFIX + "local-dirs";
   public static final String DEFAULT_NM_LOCAL_DIRS = "/tmp/nm-local-dir";
 
@@ -677,7 +679,9 @@ public class YarnConfiguration extends Configuration {
     NM_PREFIX + "localizer.fetch.thread-count";
   public static final int DEFAULT_NM_LOCALIZER_FETCH_THREAD_COUNT = 4;
 
-  /** Where to store container logs.*/
+  /** Where to store container logs.
+   * yarn.nodemanager.log-dirs 本地节点存储NodeManager的日志的路径,用空格和逗号拆分 
+   **/
   public static final String NM_LOG_DIRS = NM_PREFIX + "log-dirs";
   public static final String DEFAULT_NM_LOG_DIRS = "/tmp/logs";
 
@@ -906,7 +910,8 @@ public class YarnConfiguration extends Configuration {
   public static final String NM_DEFAULT_DOCKER_CONTAINER_EXECUTOR_EXEC_NAME =
           "/usr/bin/docker";
 
-  /** The path to the Linux container executor.*/
+  /** The path to the Linux container executor.
+   * yarn.nodemanager.linux-container-executor.path,正常返回/hadoop/bin/container-executor可执行文件理路径*/
   public static final String NM_LINUX_CONTAINER_EXECUTOR_PATH =
     NM_PREFIX + "linux-container-executor.path";
   
@@ -1001,9 +1006,11 @@ public class YarnConfiguration extends Configuration {
   public static final String NM_PRINCIPAL =
     NM_PREFIX + "principal";
   
+  //yarn.nodemanager.aux-services
   public static final String NM_AUX_SERVICES = 
-    NM_PREFIX + "aux-services";
+    NM_PREFIX + "aux-services";//第三方服务
   
+  //yarn.nodemanager.aux-services.%s.class 第三方服务的class
   public static final String NM_AUX_SERVICE_FMT =
     NM_PREFIX + "aux-services.%s.class";
 

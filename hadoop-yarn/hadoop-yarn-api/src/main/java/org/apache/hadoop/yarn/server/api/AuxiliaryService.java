@@ -33,7 +33,9 @@ import org.apache.hadoop.yarn.conf.YarnConfiguration;
  * A generic service that will be started by the NodeManager. This is a service
  * that administrators have to configure on each node by setting
  * {@link YarnConfiguration#NM_AUX_SERVICES}.
+ * NodeManager加载额外的一个服务,由第三方提供
  * 
+ * 该服务主要针对应用初始化,应用停止,容器初始化、容器停止的时候调用 即AuxServicesEventType
  */
 @Public
 @Evolving
@@ -41,6 +43,7 @@ public abstract class AuxiliaryService extends AbstractService {
 
   private Path recoveryPath = null;
 
+  //服务名称
   protected AuxiliaryService(String name) {
     super(name);
   }
@@ -119,6 +122,7 @@ public abstract class AuxiliaryService extends AbstractService {
    * that will be used during recovery.
    *
    * @param recoveryPath where recoverable state should be stored
+   * 设置该服务的恢复路径
    */
   public void setRecoveryPath(Path recoveryPath) {
     this.recoveryPath = recoveryPath;

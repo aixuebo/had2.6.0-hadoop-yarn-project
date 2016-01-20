@@ -46,6 +46,9 @@ import org.apache.hadoop.yarn.server.api.ContainerTerminationContext;
 
 import com.google.common.base.Preconditions;
 
+/**
+ * 加载第三方服务接口
+ */
 public class AuxServices extends AbstractService
     implements ServiceStateChangeListener, EventHandler<AuxServicesEvent> {
 
@@ -53,9 +56,15 @@ public class AuxServices extends AbstractService
 
   private static final Log LOG = LogFactory.getLog(AuxServices.class);
 
+  /**
+   * 添加第三方服务,名称以及对应的服务
+   */
   protected final Map<String,AuxiliaryService> serviceMap;
+  
+  //每一个第三方服务,对应的数据内容
   protected final Map<String,ByteBuffer> serviceMetaData;
 
+  //第三方服务名称正则规则
   private final Pattern p = Pattern.compile("^[A-Za-z_]+[A-Za-z0-9_]*$");
 
   public AuxServices() {
@@ -65,12 +74,18 @@ public class AuxServices extends AbstractService
     // Obtain services from configuration in init()
   }
 
+  /**
+   * 添加一个服务
+   * @param name
+   * @param service
+   */
   protected final synchronized void addService(String name,AuxiliaryService service) {
     LOG.info("Adding auxiliary service " +
         service.getName() + ", \"" + name + "\"");
     serviceMap.put(name, service);
   }
 
+  //获取全部的第三方服务集合
   Collection<AuxiliaryService> getServices() {
     return Collections.unmodifiableCollection(serviceMap.values());
   }
@@ -93,8 +108,8 @@ public class AuxServices extends AbstractService
   @Override
   public void serviceInit(Configuration conf) throws Exception {
     final FsPermission storeDirPerms = new FsPermission((short)0700);
-    Path stateStoreRoot = null;
-    FileSystem stateStoreFs = null;
+    Path stateStoreRoot = null;//可以恢复的数据,根目录
+    FileSystem stateStoreFs = null;//本地操作系统
     boolean recoveryEnabled = conf.getBoolean(
         YarnConfiguration.NM_RECOVERY_ENABLED,
         YarnConfiguration.DEFAULT_NM_RECOVERY_ENABLED);
@@ -103,10 +118,13 @@ public class AuxServices extends AbstractService
           STATE_STORE_ROOT_NAME);
       stateStoreFs = FileSystem.getLocal(conf);
     }
+    
+    //获取全部第三方服务
     Collection<String> auxNames = conf.getStringCollection(
         YarnConfiguration.NM_AUX_SERVICES);
     for (final String sName : auxNames) {
       try {
+    	  //校验第三方服务名称
         Preconditions
             .checkArgument(
                 validateAuxServiceName(sName),
@@ -114,6 +132,8 @@ public class AuxServices extends AbstractService
                 YarnConfiguration.NM_AUX_SERVICES +" is invalid." +
                 "The valid service name should only contain a-zA-Z0-9_ " +
                 "and can not start with numbers");
+        
+        //获取yarn.nodemanager.aux-services.%s.class 第三方服务的class
         Class<? extends AuxiliaryService> sClass = conf.getClass(
               String.format(YarnConfiguration.NM_AUX_SERVICE_FMT, sName), null,
               AuxiliaryService.class);
@@ -130,7 +150,10 @@ public class AuxServices extends AbstractService
                   +"Service Meta Data may have issues unless the refer to "
                   +"the name in the config.");
         }
+        //添加第三方服务
         addService(sName, s);
+        
+        //设置对第三方服务进行恢复
         if (recoveryEnabled) {
           Path storePath = new Path(stateStoreRoot, sName);
           stateStoreFs.mkdirs(storePath, storeDirPerms);
@@ -149,11 +172,14 @@ public class AuxServices extends AbstractService
   public void serviceStart() throws Exception {
     // TODO fork(?) services running as configured user
     //      monitor for health, shutdown/restart(?) if any should die
+	//依次开启第三方服务
     for (Map.Entry<String, AuxiliaryService> entry : serviceMap.entrySet()) {
       AuxiliaryService service = entry.getValue();
       String name = entry.getKey();
       service.start();
+      //对该第三方服务注册监听,一旦该服务状态改变了,AuxService是能知道的
       service.registerServiceListener(this);
+      //加载每一个第三方服务对应的数据内容
       ByteBuffer meta = service.getMetaData();
       if(meta != null) {
         serviceMetaData.put(name, meta);
@@ -245,6 +271,7 @@ public class AuxServices extends AbstractService
     }
   }
 
+  //校验第三方服务名称是否合法
   private boolean validateAuxServiceName(String name) {
     if (name == null || name.trim().isEmpty()) {
       return false;
@@ -252,6 +279,9 @@ public class AuxServices extends AbstractService
     return p.matcher(name).matches();
   }
 
+  /**
+   * 当第三方服务提供异常的时候,打印日志
+   */
   private void logWarningWhenAuxServiceThrowExceptions(AuxiliaryService service,
       AuxServicesEventType eventType, Throwable th) {
     LOG.warn((null == service ? "The auxService is null"

@@ -27,7 +27,7 @@ import org.apache.hadoop.util.Shell;
 
 /**
  * Plugin to calculate resource information on the system.
- *
+ * 资源计算器,实现类是LinuxResourceCalculatorPlugin
  */
 @InterfaceAudience.LimitedPrivate({"YARN", "MAPREDUCE"})
 @InterfaceStability.Unstable
@@ -49,6 +49,7 @@ public abstract class ResourceCalculatorPlugin extends Configured {
    * Obtain the total size of the virtual memory present in the system.
    *
    * @return virtual memory size in bytes.
+   * 当前服务器虚拟内存总大小,单位是字节
    */
   public abstract long getVirtualMemorySize();
 
@@ -56,6 +57,7 @@ public abstract class ResourceCalculatorPlugin extends Configured {
    * Obtain the total size of the physical memory present in the system.
    *
    * @return physical memory size bytes.
+   * 当前服务器物理内存总大小,单位是字节
    */
   public abstract long getPhysicalMemorySize();
 
@@ -64,6 +66,7 @@ public abstract class ResourceCalculatorPlugin extends Configured {
    * in the system.
    *
    * @return available virtual memory size in bytes.
+   * 当前服务器剩余虚拟内存总大小,单位是字节
    */
   public abstract long getAvailableVirtualMemorySize();
 
@@ -72,6 +75,7 @@ public abstract class ResourceCalculatorPlugin extends Configured {
    * in the system.
    *
    * @return available physical memory size bytes.
+   * 当前服务器剩余物理内存总大小,单位是字节
    */
   public abstract long getAvailablePhysicalMemorySize();
 
@@ -79,6 +83,7 @@ public abstract class ResourceCalculatorPlugin extends Configured {
    * Obtain the total number of processors present on the system.
    *
    * @return number of processors
+   * 当前服务器多少个cpu
    */
   public abstract int getNumProcessors();
 
@@ -86,6 +91,7 @@ public abstract class ResourceCalculatorPlugin extends Configured {
    * Obtain the CPU frequency of on the system.
    *
    * @return CPU frequency in kHz
+   * 当前服务器多少cpu空闲
    */
   public abstract long getCpuFrequency();
 

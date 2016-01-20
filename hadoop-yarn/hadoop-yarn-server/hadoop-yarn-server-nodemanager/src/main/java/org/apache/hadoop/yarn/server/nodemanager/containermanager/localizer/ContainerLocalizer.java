@@ -83,11 +83,11 @@ public class ContainerLocalizer {
    * 1..usercache/user/appcache/appId/filecache
    * 2..usercache/user/filecache
    */
-  public static final String FILECACHE = "filecache";
-  public static final String APPCACHE = "appcache";
-  public static final String USERCACHE = "usercache";
+  public static final String FILECACHE = "filecache";///base/usercache/$user/filecache
+  public static final String APPCACHE = "appcache";///base/usercache/$user/appcache
+  public static final String USERCACHE = "usercache";// /base/usercache/$user
   public static final String OUTPUTDIR = "output";
-  public static final String TOKEN_FILE_NAME_FMT = "%s.tokens";//localizerId.tokens
+  public static final String TOKEN_FILE_NAME_FMT = "%s.tokens";//$localizerId.tokens
   public static final String WORKDIR = "work";
   private static final String APPCACHE_CTXT_FMT = "%s.app.cache.dirs";//appId.app.cache.dirs,存储内容:$x/usercache/$user/appcache/$appId/filecache 该应用的缓存空间
   private static final String USERCACHE_CTXT_FMT = "%s.user.cache.dirs";//user.user.cache.dirs,存储内容:$x/usercache/$user/filecache 该用户的缓存空间

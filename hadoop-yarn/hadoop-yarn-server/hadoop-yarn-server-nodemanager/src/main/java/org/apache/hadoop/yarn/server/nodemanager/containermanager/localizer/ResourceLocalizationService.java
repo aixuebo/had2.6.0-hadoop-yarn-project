@@ -137,6 +137,8 @@ import com.google.common.util.concurrent.ThreadFactoryBuilder;
 /**
  * 资源本地化服务
  * 是本地化的入口类
+ * 
+ * 处理LocalizationEventType类型的事件
  */
 public class ResourceLocalizationService extends CompositeService
     implements EventHandler<LocalizationEvent>, LocalizationProtocol {
@@ -643,7 +645,7 @@ public class ResourceLocalizationService extends CompositeService
   }
   
   /**
-   * Sub-component handling the spawning of {@link ContainerLocalizer}s
+   * Sub-component handling the spawning of {@link ContainerLocalizer}
    */
   class LocalizerTracker extends AbstractService implements EventHandler<LocalizerEvent>  {
 

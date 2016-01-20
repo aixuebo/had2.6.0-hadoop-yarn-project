@@ -17,6 +17,9 @@
  */
 package org.apache.hadoop.yarn.server.nodemanager;
 
+/**
+ * NodeManager应该有的事件类型 
+ */
 public enum NodeManagerEventType {
   SHUTDOWN, 
   RESYNC//重新与ResourceManager同步交互

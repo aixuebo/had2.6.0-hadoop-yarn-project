@@ -71,22 +71,23 @@ public class NodeManager extends CompositeService
 
   /**
    * Priority of the NodeManager shutdown hook.
+   * shutDown的优先级
    */
   public static final int SHUTDOWN_HOOK_PRIORITY = 30;
 
   private static final Log LOG = LogFactory.getLog(NodeManager.class);
-  protected final NodeManagerMetrics metrics = NodeManagerMetrics.create();
-  private ApplicationACLsManager aclsManager;
-  private NodeHealthCheckerService nodeHealthChecker;
-  private LocalDirsHandlerService dirsHandler;
+  protected final NodeManagerMetrics metrics = NodeManagerMetrics.create();//统计信息
+  private ApplicationACLsManager aclsManager;//为每一个application添加权限信息服务
+  private NodeHealthCheckerService nodeHealthChecker;//检查该node节点是否正常服务
+  private LocalDirsHandlerService dirsHandler;//检查磁盘是否正常服务
   private Context context;
-  private AsyncDispatcher dispatcher;
+  private AsyncDispatcher dispatcher;//事件分发服务
   private ContainerManagerImpl containerManager;
-  private NodeStatusUpdater nodeStatusUpdater;
-  private static CompositeServiceShutdownHook nodeManagerShutdownHook; 
-  private NMStateStoreService nmStore = null;
+  private NodeStatusUpdater nodeStatusUpdater;//统计和更新节点信息 服务
+  private static CompositeServiceShutdownHook nodeManagerShutdownHook; //shutDown jvm的时候调用该方法,关闭NodeManager服务
+  private NMStateStoreService nmStore = null;//日志存储器,用于数据恢复
   
-  private AtomicBoolean isStopping = new AtomicBoolean(false);
+  private AtomicBoolean isStopping = new AtomicBoolean(false);//true表示已经停止NodeManager服务了
   private boolean rmWorkPreservingRestartEnabled;
 
   public NodeManager() {
@@ -172,6 +173,12 @@ public class NodeManager extends CompositeService
     }
   }
 
+  /**
+   * 恢复NodeManager的token和container容器的token
+   * @param nmTokenSecretManager
+   * @param containerTokenSecretManager
+   * @throws IOException
+   */
   private void recoverTokens(NMTokenSecretManagerInNM nmTokenSecretManager,
       NMContainerTokenSecretManager containerTokenSecretManager)
           throws IOException {
@@ -196,8 +203,10 @@ public class NodeManager extends CompositeService
 
     NMTokenSecretManagerInNM nmTokenSecretManager = new NMTokenSecretManagerInNM(nmStore);
 
+    //恢复NodeManager的token和container容器的token
     recoverTokens(nmTokenSecretManager, containerTokenSecretManager);
     
+    //创建app的权限对象
     this.aclsManager = new ApplicationACLsManager(conf);
 
     ContainerExecutor exec = ReflectionUtils.newInstance(
@@ -208,6 +217,8 @@ public class NodeManager extends CompositeService
     } catch (IOException e) {
       throw new YarnRuntimeException("Failed to initialize container executor", e);
     }    
+    
+    //创建删除服务
     DeletionService del = createDeletionService(exec);
     addService(del);
 
@@ -315,8 +326,8 @@ public class NodeManager extends CompositeService
 
     protected final ConcurrentMap<ContainerId, Container> containers = new ConcurrentSkipListMap<ContainerId, Container>();
 
-    private final NMContainerTokenSecretManager containerTokenSecretManager;
-    private final NMTokenSecretManagerInNM nmTokenSecretManager;
+    private final NMContainerTokenSecretManager containerTokenSecretManager;//全局的关于container容器的token管理器
+    private final NMTokenSecretManagerInNM nmTokenSecretManager;//全局的关于nodeManager容器的token管理器
     private ContainerManagementProtocol containerManager;
     private final LocalDirsHandlerService dirsHandler;
     private final ApplicationACLsManager aclsManager;
@@ -442,11 +453,12 @@ public class NodeManager extends CompositeService
   private void initAndStartNodeManager(Configuration conf, boolean hasToReboot) {
     try {
 
-      // Remove the old hook if we are rebooting.
+      // Remove the old hook if we are rebooting.如果重新启动NodeManager,则将原先设置的钩子先删除掉,后续重新添加该钩子
       if (hasToReboot && null != nodeManagerShutdownHook) {
         ShutdownHookManager.get().removeShutdownHook(nodeManagerShutdownHook);
       }
 
+      //设置钩子,当JVM结束的时候,执行该钩子,将nodeManager服务进程关闭掉
       nodeManagerShutdownHook = new CompositeServiceShutdownHook(this);
       ShutdownHookManager.get().addShutdownHook(nodeManagerShutdownHook,
                                                 SHUTDOWN_HOOK_PRIORITY);

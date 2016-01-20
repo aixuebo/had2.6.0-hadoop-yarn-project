@@ -29,7 +29,7 @@ import org.apache.hadoop.yarn.server.nodemanager.containermanager.container
 public class AuxServicesEvent extends AbstractEvent<AuxServicesEventType> {
 
   private final String user;
-  private final String serviceId;
+  private final String serviceId;//AuxiliaryService第三方服务的name,即该事件是哪个第三方服务发出来的
   private final ByteBuffer serviceData;
   private final ApplicationId appId;
   private final Container container;

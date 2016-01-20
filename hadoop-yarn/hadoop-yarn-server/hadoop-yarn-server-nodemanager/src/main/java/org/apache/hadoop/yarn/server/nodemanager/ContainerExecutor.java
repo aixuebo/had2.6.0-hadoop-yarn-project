@@ -52,6 +52,7 @@ import org.apache.hadoop.util.StringUtils;
 public abstract class ContainerExecutor implements Configurable {
 
   private static final Log LOG = LogFactory.getLog(ContainerExecutor.class);
+  //为脚本设置一个执行权限
   final public static FsPermission TASK_LAUNCH_SCRIPT_PERMISSION = FsPermission.createImmutable((short) 0700);
 
   private Configuration conf;
@@ -406,7 +407,7 @@ public abstract class ContainerExecutor implements Configurable {
    * @param containerID
    * @return the processid of the container if it has already launched,
    *         otherwise return null
-   *         获取该容器的进行id信息,windows下进程id是字符串
+   * 获取该容器的进行id信息,windows下进程id是字符串
    */
   public String getProcessId(ContainerId containerID) {
     String pid = null;

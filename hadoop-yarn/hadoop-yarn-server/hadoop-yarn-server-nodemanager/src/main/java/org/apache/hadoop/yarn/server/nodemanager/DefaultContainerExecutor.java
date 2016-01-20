@@ -83,6 +83,7 @@ public class DefaultContainerExecutor extends ContainerExecutor {
     lfs.util().copy(src, dst);
   }
   
+  //设置脚本的权限
   protected void setScriptExecutable(Path script, String owner) throws IOException {
     lfs.setPermission(script, ContainerExecutor.TASK_LAUNCH_SCRIPT_PERMISSION);
   }
@@ -98,10 +99,13 @@ public class DefaultContainerExecutor extends ContainerExecutor {
       LocalDirsHandlerService dirsHandler)
       throws IOException, InterruptedException {
 
+	  /**
+	   * 数据目录和日志目录
+	   */
     List<String> localDirs = dirsHandler.getLocalDirs();
     List<String> logDirs = dirsHandler.getLogDirs();
     
-    createUserLocalDirs(localDirs, user);
+    createUserLocalDirs(localDirs, user);//base/usercache/$user
     createUserCacheDirs(localDirs, user);
     createAppDirs(localDirs, user, appId);
     createAppLogDirs(appId, logDirs, user);
@@ -109,6 +113,7 @@ public class DefaultContainerExecutor extends ContainerExecutor {
     // randomly choose the local directory
     Path appStorageDir = getWorkingDir(localDirs, user, appId);
 
+    // $locId.tokens
     String tokenFn = String.format(ContainerLocalizer.TOKEN_FILE_NAME_FMT, locId);
     Path tokenDst = new Path(appStorageDir, tokenFn);
     copyFile(nmPrivateContainerTokensPath, tokenDst, user);
@@ -485,23 +490,38 @@ public class DefaultContainerExecutor extends ContainerExecutor {
    * $logdir/$user/$appId */
   static final short LOGDIR_PERM = (short)0710;
 
+  /**
+   * 获取base的剩余空间
+   */
   private long getDiskFreeSpace(Path base) throws IOException {
     return lfs.getFsStatus(base).getRemaining();
   }
 
+  /**
+   * /base/usercache/$user/appcache/$appId
+   */
   private Path getApplicationDir(Path base, String user, String appId) {
     return new Path(getAppcacheDir(base, user), appId);
   }
 
+  /**
+   * /base/usercache/$user
+   */
   private Path getUserCacheDir(Path base, String user) {
     return new Path(new Path(base, ContainerLocalizer.USERCACHE), user);
   }
 
+  /**
+   * /base/usercache/$user/appcache
+   */
   private Path getAppcacheDir(Path base, String user) {
     return new Path(getUserCacheDir(base, user),
         ContainerLocalizer.APPCACHE);
   }
 
+  /**
+   * /base/usercache/$user/filecache
+   */
   private Path getFileCacheDir(Path base, String user) {
     return new Path(getUserCacheDir(base, user),
         ContainerLocalizer.FILECACHE);
@@ -724,6 +744,7 @@ public class DefaultContainerExecutor extends ContainerExecutor {
 
   /**
    * @return the list of paths of given local directories
+   * 将目录转换成Path集合
    */
   private static List<Path> getPaths(List<String> dirs) {
     List<Path> paths = new ArrayList<Path>(dirs.size());

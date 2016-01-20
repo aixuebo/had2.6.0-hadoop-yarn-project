@@ -41,15 +41,18 @@ import org.apache.hadoop.util.DiskChecker;
 
 /**
  * Manages a list of local storage directories.
+ * 主要校验本地多个磁盘,哪个磁盘满了,哪个磁盘异常不可用了,哪些磁盘是正常磁盘
  */
 class DirectoryCollection {
   private static final Log LOG = LogFactory.getLog(DirectoryCollection.class);
 
   //磁盘失败原因
   public enum DiskErrorCause {
-    DISK_FULL, OTHER
+    DISK_FULL,//磁盘满了
+    OTHER//其他原因导致的失败
   }
 
+  //磁盘异常时候的详细信息
   static class DiskErrorInformation {
     DiskErrorCause cause;
     String message;
@@ -81,8 +84,8 @@ class DirectoryCollection {
 
   private int numFailures;//失败次数
   
-  private float diskUtilizationPercentageCutoff;//的值在0-100之间,使用磁盘大小百分比限制
-  private long diskUtilizationSpaceCutoff;//值在0-utilizationSpaceCutOff之间,磁盘利用空间不能大于该值,即每个磁盘最小要保留的空间
+  private float diskUtilizationPercentageCutoff;//的值在0-100之间,使用磁盘大小百分比限制,使用的磁盘占用总磁盘的百分比 > 该值,则说明磁盘满了
+  private long diskUtilizationSpaceCutoff;//单位是兆,每个磁盘最小要保留的空间,如果剩余空间超过了<该值,则说明磁盘满了,例如该值为5M,则剩余空间为4M的时候,为磁盘满了
 
   /**
    * Create collection for the directories specified. No check for free space.
@@ -139,11 +142,13 @@ class DirectoryCollection {
    * @param utilizationSpaceCutOff
    *          minimum space, in MB, that must be available on the disk for the
    *          dir to be marked as good
+   *          
    * 
    */
   public DirectoryCollection(String[] dirs, 
       float utilizationPercentageCutOff,
       long utilizationSpaceCutOff) {
+	//初始化所有的目录都是正常的目录
     localDirs = new CopyOnWriteArrayList<String>(dirs);
     errorDirs = new CopyOnWriteArrayList<String>();
     fullDirs = new CopyOnWriteArrayList<String>();
@@ -153,10 +158,13 @@ class DirectoryCollection {
     //diskUtilizationSpaceCutoff的值在0-utilizationSpaceCutOff之间
     diskUtilizationSpaceCutoff = utilizationSpaceCutOff;
     
+    //设置值在0-100之间
     diskUtilizationPercentageCutoff =
         utilizationPercentageCutOff < 0.0F ? 0.0F
             : (utilizationPercentageCutOff > 100.0F ? 100.0F
                 : utilizationPercentageCutOff);
+    
+    //设置值必须大于0
     diskUtilizationSpaceCutoff =
         utilizationSpaceCutOff < 0 ? 0 : utilizationSpaceCutOff;
   }
@@ -227,13 +235,17 @@ class DirectoryCollection {
    *         otherwise.
    */
   synchronized boolean checkDirs() {
-    boolean setChanged = false;
+    boolean setChanged = false;//true磁盘好坏有更改情况
+    
+    //预先设置三个集合,相当于copy的过程
     Set<String> preCheckGoodDirs = new HashSet<String>(localDirs);
     Set<String> preCheckFullDirs = new HashSet<String>(fullDirs);
     Set<String> preCheckOtherErrorDirs = new HashSet<String>(errorDirs);
     
     //汇总目录
+    //合并所有的异常目录集合,是一个复制的过程
     List<String> failedDirs = DirectoryCollection.concat(errorDirs, fullDirs);
+    //合并所有的目录集合,是一个复制的过程
     List<String> allLocalDirs = DirectoryCollection.concat(localDirs, failedDirs);
 
     //检查是否有异常的磁盘
@@ -245,7 +257,7 @@ class DirectoryCollection {
 
     //循环每一个异常磁盘
     for (Map.Entry<String, DiskErrorInformation> entry : dirsFailedCheck.entrySet()) {
-      String dir = entry.getKey();//磁盘理解
+      String dir = entry.getKey();//磁盘路径
       DiskErrorInformation errorInformation = entry.getValue();//磁盘对应的异常类
       switch (entry.getValue().cause) {
       case DISK_FULL://磁盘满了
@@ -324,6 +336,7 @@ class DirectoryCollection {
          */
         verifyDirUsingMkdir(testDir);
       } catch (IOException ie) {
+    	//其他异常信息
         ret.put(dir,new DiskErrorInformation(DiskErrorCause.OTHER, ie.getMessage()));
       }
     }
@@ -337,7 +350,7 @@ class DirectoryCollection {
    * @param dir
    *          the dir to test
    * 1.在参数目录下创建一个目录,并且检查该目录是否有读、写、执行权限
-   * 2.情况该目录下所有文件,并且删除该目录        
+   * 2.情况该目录下所有文件,并且删除该目录
    */
   private void verifyDirUsingMkdir(File dir) throws IOException {
 
