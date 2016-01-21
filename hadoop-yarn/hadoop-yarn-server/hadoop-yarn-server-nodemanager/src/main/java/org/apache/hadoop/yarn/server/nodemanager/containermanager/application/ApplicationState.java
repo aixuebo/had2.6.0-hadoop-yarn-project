@@ -18,13 +18,16 @@
 
 package org.apache.hadoop.yarn.server.nodemanager.containermanager.application;
 
+/**
+ * 应用的状态
+ */
 public enum ApplicationState {
-  NEW, 
-  INITING, 
-  RUNNING, 
+  NEW, //初始状态
+  INITING, //正在初始化中,尚未初始化完成
+  RUNNING, //该应用已经在运行中了
   
   FINISHING_CONTAINERS_WAIT, //应用完成了,但是容器还存在,则发送kill杀死掉活着的容器
   APPLICATION_RESOURCES_CLEANINGUP, //清理应用程序的资源
   
-  FINISHED 
+  FINISHED //该应用完成,至于完成的原因是正常的完成,还是异常导致的完成
 }

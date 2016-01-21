@@ -20,15 +20,15 @@ package org.apache.hadoop.yarn.server.nodemanager.containermanager.application;
 
 public enum ApplicationEventType {
 
-  // Source: ContainerManager
   INIT_APPLICATION,//初始化应用,即初始化一些日志系统,设置应用的权限信息
-  INIT_CONTAINER,//初始化一个容器
-  FINISH_APPLICATION, // Source: LogAggregationService if init fails  resourceManager发来的信息,表示该应用完成
-
   // Source: ResourceLocalizationService
   APPLICATION_INITED,//应用全部初始化完成,开始到run状态
   APPLICATION_RESOURCES_CLEANEDUP,//资源清理
-
+  //resourceManager发来的信息,表示该应用完成,该完成可能是正常的完成,也可以应用异常导致的完成
+  FINISH_APPLICATION, // Source: LogAggregationService if init fails  
+  
+  // Source: ContainerManager
+  INIT_CONTAINER,//初始化一个容器
   // Source: Container
   APPLICATION_CONTAINER_FINISHED,//应用完成了一个容器时触发的事件
 

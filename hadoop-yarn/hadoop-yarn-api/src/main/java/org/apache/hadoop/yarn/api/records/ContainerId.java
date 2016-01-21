@@ -181,6 +181,9 @@ public abstract class ContainerId implements Comparable<ContainerId>{
    * *epoch* is increased when RM restarts or fails over.
    * When epoch is 0, epoch is omitted
    * (e.g. container_1410901177871_0001_01_000005).
+   * 
+   * container_1410901177871_0001_01_000005
+   * container_集群开启时间戳_applicationId_applicationAttemptId_containerId
    */
   @Override
   public String toString() {

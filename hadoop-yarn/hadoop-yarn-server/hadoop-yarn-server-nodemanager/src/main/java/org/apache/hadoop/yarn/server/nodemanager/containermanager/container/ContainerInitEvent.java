@@ -19,6 +19,10 @@ package org.apache.hadoop.yarn.server.nodemanager.containermanager.container;
 
 import org.apache.hadoop.yarn.api.records.ContainerId;
 
+/**
+ * 真正去初始化一个容器,此时该容器所在的应用已经处于运行中了,即所需要的资源已经加载完毕
+ * ApplicationImpl.InitContainerTransition调用该方法
+ */
 public class ContainerInitEvent extends ContainerEvent {
 
   public ContainerInitEvent(ContainerId c) {

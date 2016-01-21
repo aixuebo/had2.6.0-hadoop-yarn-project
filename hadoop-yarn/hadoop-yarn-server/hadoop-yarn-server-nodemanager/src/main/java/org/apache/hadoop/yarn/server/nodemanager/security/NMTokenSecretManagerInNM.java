@@ -185,7 +185,7 @@ public class NMTokenSecretManagerInNM extends BaseNMTokenSecretManager {
         + appAttemptId.toString() + " seems to have been generated illegally.");
   }
 
-  //向token服务器发送该应用彻底完成了
+  //向token服务器发送该应用彻底完成了,ApplicationImpl,当应用彻底完成之后,调用该方法
   public synchronized void appFinished(ApplicationId appId) {
     List<ApplicationAttemptId> appAttemptList = appToAppAttemptMap.get(appId);
     if (appAttemptList != null) {

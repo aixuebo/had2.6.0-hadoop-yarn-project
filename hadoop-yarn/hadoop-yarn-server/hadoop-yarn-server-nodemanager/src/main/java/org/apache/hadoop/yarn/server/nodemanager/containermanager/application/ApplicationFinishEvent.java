@@ -22,9 +22,10 @@ import org.apache.hadoop.yarn.api.records.ApplicationId;
 
 /**
  * Finish/abort event
+ * 表示应用完成了,该完成可能是正常完成,也可能是异常导致的完成
  */
 public class ApplicationFinishEvent extends ApplicationEvent {
-  private final String diagnostic;
+  private final String diagnostic;//异常完成时候,输出的信息
 
   /**
    * Application event to abort all containers associated with the app

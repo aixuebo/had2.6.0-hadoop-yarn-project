@@ -19,6 +19,9 @@ package org.apache.hadoop.yarn.server.nodemanager.containermanager.application;
 
 import org.apache.hadoop.yarn.api.records.ApplicationId;
 
+/**
+ * 表示应用初始化完成
+ */
 public class ApplicationInitedEvent extends ApplicationEvent {
 
   public ApplicationInitedEvent(ApplicationId appID) {

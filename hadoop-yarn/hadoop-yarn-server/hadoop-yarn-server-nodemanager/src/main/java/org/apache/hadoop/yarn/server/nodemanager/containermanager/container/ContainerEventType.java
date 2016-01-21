@@ -20,9 +20,10 @@ package org.apache.hadoop.yarn.server.nodemanager.containermanager.container;
 
 public enum ContainerEventType {
 
-  // Producer: ContainerManager
+  // Producer: ContainerManager 
+  //真正去初始化一个容器,此时该容器所在的应用已经处于运行中了,即所需要的资源已经加载完毕,ApplicationImpl.InitContainerTransition调用该方法
   INIT_CONTAINER,//容器初始化
-  KILL_CONTAINER,//容器被kill掉
+  KILL_CONTAINER,//容器被kill掉,比如应用都已经全部完成了,但是应用的容器还在,则要将其删除
   UPDATE_DIAGNOSTICS_MSG,//更新容器输出信息
   CONTAINER_DONE,//容器完成
 

@@ -141,7 +141,7 @@ public class ContainerImpl implements Container {
     stateMachine = stateMachineFactory.make(this);
   }
 
-  // constructor for a recovered container
+  // constructor for a recovered container 用于恢复容器时的构造函数
   public ContainerImpl(Configuration conf, Dispatcher dispatcher,
       NMStateStoreService stateStore, ContainerLaunchContext launchContext,
       Credentials creds, NodeManagerMetrics metrics,
@@ -623,6 +623,7 @@ public class ContainerImpl implements Container {
       final ContainerLaunchContext ctxt = container.launchContext;
       container.metrics.initingContainer();
 
+      //发送事件给第三方插件服务,表示容器开始初始化了
       container.dispatcher.getEventHandler().handle(new AuxServicesEvent(AuxServicesEventType.CONTAINER_INIT, container));
 
       // Inform the AuxServices about the opaque serviceData
@@ -1018,6 +1019,10 @@ public class ContainerImpl implements Container {
     }
   }
 
+  /**
+   * 打印container_1410901177871_0001_01_000005
+   * container_集群开启时间戳_applicationId_applicationAttemptId_containerId
+   */
   @Override
   public String toString() {
     this.readLock.lock();
@@ -1028,6 +1033,9 @@ public class ContainerImpl implements Container {
     }
   }
 
+  /**
+   * true表示还是默认的退出码
+   */
   private boolean hasDefaultExitCode() {
     return (this.exitCode == ContainerExitStatus.INVALID);
   }

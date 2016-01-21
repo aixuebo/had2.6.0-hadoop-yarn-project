@@ -21,7 +21,7 @@ package org.apache.hadoop.yarn.server.nodemanager.containermanager;
 //第三方服务监控应用开启、停止、容器初始化、容器停止事件
 public enum AuxServicesEventType {
   APPLICATION_INIT,
-  APPLICATION_STOP,
+  APPLICATION_STOP,//应用完成时候调用该事件
   CONTAINER_INIT,
   CONTAINER_STOP
 }

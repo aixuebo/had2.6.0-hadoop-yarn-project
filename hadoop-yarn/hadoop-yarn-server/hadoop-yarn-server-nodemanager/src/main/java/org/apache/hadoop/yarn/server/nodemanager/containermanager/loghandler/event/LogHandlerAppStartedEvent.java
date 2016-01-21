@@ -28,6 +28,7 @@ import org.apache.hadoop.yarn.logaggregation.ContainerLogsRetentionPolicy;
 
 /**
  * 日志记录系统
+ * ApplicationImpl.AppInitTransition方法调用该事件
  */
 public class LogHandlerAppStartedEvent extends LogHandlerEvent {
 

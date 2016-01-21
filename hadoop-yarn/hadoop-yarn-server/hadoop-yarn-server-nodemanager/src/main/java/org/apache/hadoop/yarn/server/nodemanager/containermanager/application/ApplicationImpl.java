@@ -60,7 +60,7 @@ import com.google.common.annotations.VisibleForTesting;
 /**
  * The state machine for the representation of an Application
  * within the NodeManager.
- * 该类表示在该节点上处理的应用对象
+ * 该类表示在该节点上处理的应用对象,以及处理应用的一些事件
  */
 public class ApplicationImpl implements Application {
 
@@ -72,7 +72,7 @@ public class ApplicationImpl implements Application {
   final ApplicationACLsManager aclsManager;//访问权限
   private final ReadLock readLock;
   private final WriteLock writeLock;
-  private final Context context;
+  private final Context context;//nodemanager上下文对象
 
   private static final Log LOG = LogFactory.getLog(Application.class);
 
@@ -126,6 +126,9 @@ public class ApplicationImpl implements Application {
 
   private static final ContainerDoneTransition CONTAINER_DONE_TRANSITION = new ContainerDoneTransition();
 
+  /**
+   * 参见hadoop根目录下面的hadoop2.6.0事件转换.xlsx
+   */
   private static StateMachineFactory<ApplicationImpl, ApplicationState,
           ApplicationEventType, ApplicationEvent> stateMachineFactory =
       new StateMachineFactory<ApplicationImpl, ApplicationState,
@@ -228,7 +231,7 @@ public class ApplicationImpl implements Application {
    * Notify services of new application.
    * 
    * In particular, this initializes the {@link LogAggregationService}
-   * 初始化应用,即初始化一些日志系统,设置应用的权限信息
+   * 初始化一些应用需要的属性,比如权限,启动日志服务等初始化过程,然后调用日志系统,通知该应用已经开始运行
    */
   @SuppressWarnings("unchecked")
   static class AppInitTransition implements
@@ -294,6 +297,8 @@ public class ApplicationImpl implements Application {
    * queue these up. When we're in the RUNNING state, we pass along
    * an ContainerInitEvent to the appropriate ContainerImpl.
    * 在运行状态下,初始化一个容器,即为该任务在该节点上分配了一个容器,则需要调动容器的init事件
+   * 真正去初始化一个容器,此时该容器所在的应用已经处于运行中了,即所需要的资源已经加载完毕
+   *调用new ContainerInitEvent(container.getContainerId())
    */
   @SuppressWarnings("unchecked")
   static class InitContainerTransition implements
@@ -302,12 +307,13 @@ public class ApplicationImpl implements Application {
     public void transition(ApplicationImpl app, ApplicationEvent event) {
       ApplicationContainerInitEvent initEvent = (ApplicationContainerInitEvent) event;
       Container container = initEvent.getContainer();
+      //添加映射关系
       app.containers.put(container.getContainerId(), container);
       LOG.info("Adding " + container.getContainerId()
           + " to application " + app.toString());
       
       switch (app.getApplicationState()) {
-      case RUNNING:
+      case RUNNING://如果应用已经在运行中了,则调用容器初始化事件
         app.dispatcher.getEventHandler().handle(new ContainerInitEvent(container.getContainerId()));
         break;
       case INITING:
@@ -346,7 +352,7 @@ public class ApplicationImpl implements Application {
     @Override
     public void transition(ApplicationImpl app, ApplicationEvent event) {
       ApplicationContainerFinishedEvent containerEvent = (ApplicationContainerFinishedEvent) event;
-      if (null == app.containers.remove(containerEvent.getContainerID())) {
+      if (null == app.containers.remove(containerEvent.getContainerID())) {//真正从应用中移除该容器
         LOG.warn("Removing unknown " + containerEvent.getContainerID() + " from application " + app.toString());
       } else {
         LOG.info("Removing " + containerEvent.getContainerID() + " from application " + app.toString());
@@ -354,6 +360,9 @@ public class ApplicationImpl implements Application {
     }
   }
 
+  /**
+   * 应用已经完成了,容器也没有了,因此调用该方法
+   */
   @SuppressWarnings("unchecked")
   void handleAppFinishWithContainersCleanedup() {
     // Delete Application level resources 由于该应用已经被完成,因此要清理该应用加载的资源
@@ -376,7 +385,7 @@ public class ApplicationImpl implements Application {
     @Override
     public ApplicationState transition(ApplicationImpl app,ApplicationEvent event) {
       ApplicationFinishEvent appEvent = (ApplicationFinishEvent)event;
-      if (app.containers.isEmpty()) {
+      if (app.containers.isEmpty()) {//如果没有容器了,则清理应用
         // No container to cleanup. Cleanup app level resources.
         app.handleAppFinishWithContainersCleanedup();
         return ApplicationState.APPLICATION_RESOURCES_CLEANINGUP;
@@ -394,6 +403,11 @@ public class ApplicationImpl implements Application {
     }
   }
 
+  /**
+   * 一个容器完成之后,调用该方法,删除该容器的映射,
+   * 如果没有容器了,则设置为APPLICATION_RESOURCES_CLEANINGUP状态
+   * 如果还有容器,则设置为FINISHING_CONTAINERS_WAIT
+   */
   static class AppFinishTransition implements
     MultipleArcTransition<ApplicationImpl, ApplicationEvent, ApplicationState> {
 
@@ -405,6 +419,7 @@ public class ApplicationImpl implements Application {
           (ApplicationContainerFinishedEvent) event;
       LOG.info("Removing " + containerFinishEvent.getContainerID()
           + " from application " + app.toString());
+      //删除该容器的映射
       app.containers.remove(containerFinishEvent.getContainerID());
 
       if (app.containers.isEmpty()) {
@@ -455,6 +470,7 @@ public class ApplicationImpl implements Application {
     }
   }
 
+  //根据状态机变化进行函数处理
   @Override
   public void handle(ApplicationEvent event) {
 

@@ -20,6 +20,9 @@ package org.apache.hadoop.yarn.server.nodemanager.containermanager.loghandler.ev
 
 import org.apache.hadoop.yarn.api.records.ApplicationId;
 
+/**
+ * 表示该应用已经完成了,该处理日志了
+ */
 public class LogHandlerAppFinishedEvent extends LogHandlerEvent {
 
   private final ApplicationId applicationId;

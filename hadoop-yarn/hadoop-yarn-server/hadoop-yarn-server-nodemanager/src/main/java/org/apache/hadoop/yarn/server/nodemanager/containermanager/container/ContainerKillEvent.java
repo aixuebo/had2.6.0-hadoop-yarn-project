@@ -20,6 +20,9 @@ package org.apache.hadoop.yarn.server.nodemanager.containermanager.container;
 
 import org.apache.hadoop.yarn.api.records.ContainerId;
 
+/**
+ * 杀死该容器,比如应用都已经全部完成了,但是应用的容器还在,则要将其删除
+ */
 public class ContainerKillEvent extends ContainerEvent {
 
   private final String diagnostic;

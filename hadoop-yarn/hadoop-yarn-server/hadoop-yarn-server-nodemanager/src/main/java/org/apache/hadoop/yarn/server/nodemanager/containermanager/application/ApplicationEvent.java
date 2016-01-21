@@ -21,6 +21,7 @@ package org.apache.hadoop.yarn.server.nodemanager.containermanager.application;
 import org.apache.hadoop.yarn.api.records.ApplicationId;
 import org.apache.hadoop.yarn.event.AbstractEvent;
 
+//表示一个应用触发的事件,因此包含应用ID以及事件类型
 public class ApplicationEvent extends AbstractEvent<ApplicationEventType> {
 
   private final ApplicationId applicationID;

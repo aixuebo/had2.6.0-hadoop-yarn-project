@@ -20,6 +20,9 @@ package org.apache.hadoop.yarn.server.nodemanager.containermanager.application;
 
 import org.apache.hadoop.yarn.api.records.ContainerId;
 
+/**
+ * 表示一个应用的一个容器已经运行完成
+ */
 public class ApplicationContainerFinishedEvent extends ApplicationEvent {
   private ContainerId containerID;
 

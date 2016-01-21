@@ -25,7 +25,7 @@ import org.apache.hadoop.yarn.api.records.ContainerId;
 import org.apache.hadoop.yarn.event.EventHandler;
 import org.apache.hadoop.yarn.server.nodemanager.containermanager.container.Container;
 
-//该类表示在该节点上处理的应用对象
+//该类表示在该节点上处理的应用对象,以及处理应用的一些事件
 public interface Application extends EventHandler<ApplicationEvent> {
 
   //应用的所有者

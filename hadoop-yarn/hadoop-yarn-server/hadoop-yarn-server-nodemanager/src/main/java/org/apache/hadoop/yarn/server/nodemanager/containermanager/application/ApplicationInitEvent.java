@@ -24,6 +24,9 @@ import org.apache.hadoop.yarn.api.records.ApplicationId;
 import org.apache.hadoop.yarn.api.records.ApplicationAccessType;
 import org.apache.hadoop.yarn.api.records.LogAggregationContext;
 
+/**
+ * 应用准备去初始化时候发生的事件 
+ */
 public class ApplicationInitEvent extends ApplicationEvent {
 
   private final Map<ApplicationAccessType, String> applicationACLs;

@@ -26,11 +26,12 @@ import org.apache.hadoop.yarn.server.nodemanager.containermanager.container.Cont
  * request the initialization of a container. This is funneled through
  * the Application so that the application life-cycle can be checked, and container
  * launches can be delayed until the application is fully initialized.
- * 
+ * 该事件是ContainerManagerImpl发给ApplicationImpl的事件,去请求应用要去初始化该容器
  * Once the application is initialized,
  * {@link ApplicationImpl.InitContainerTransition} simply passes this event on as a
  * {@link ContainerInitEvent}.
  *  
+ *  初始化一个容器
  */
 public class ApplicationContainerInitEvent extends ApplicationEvent {
   final Container container;

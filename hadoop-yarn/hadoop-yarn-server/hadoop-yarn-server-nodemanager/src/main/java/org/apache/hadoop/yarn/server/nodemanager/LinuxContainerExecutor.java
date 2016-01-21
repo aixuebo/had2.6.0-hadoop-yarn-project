@@ -55,6 +55,9 @@ public class LinuxContainerExecutor extends ContainerExecutor {
 
   private static final Log LOG = LogFactory.getLog(LinuxContainerExecutor.class);
 
+  /**
+   * 该程序是c语言写的,源代码参见hadoop-yarn-project\hadoop-yarn\hadoop-yarn-server\hadoop-yarn-server-nodemanager\src\main\native\container-executor\impl
+   */
   private String containerExecutorExe;//找到/hadoop/bin/container-executor可执行文件理路径
   private LCEResourcesHandler resourcesHandler;//容器的资源拦截器,拦截容器执行前、后的处理
   
