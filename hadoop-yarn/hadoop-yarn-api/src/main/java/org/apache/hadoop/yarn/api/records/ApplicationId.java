@@ -107,6 +107,10 @@ public abstract class ApplicationId implements Comparable<ApplicationId> {
     }
   }
 
+  /**
+   *  * 由application_+集群启动时间戳+JobID组成
+   * 例如:application_1439549102823_0906
+   */
   @Override
   public String toString() {
     return appIdStrPrefix + this.getClusterTimestamp() + "_"

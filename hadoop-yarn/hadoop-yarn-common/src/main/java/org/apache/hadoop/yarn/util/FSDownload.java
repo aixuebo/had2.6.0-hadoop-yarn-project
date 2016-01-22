@@ -70,7 +70,7 @@ public class FSDownload implements Callable<Path> {
   private final LoadingCache<Path,Future<FileStatus>> statCache;//通过path,获取该path对应的FileStatus对象
   
   /** The local FS dir path under which this resource is to be localized to */
-  private Path destDirPath;//下载的目标目录和文件名
+  private Path destDirPath;//下载的后,存储的位置
 
   private static final FsPermission cachePerms = new FsPermission((short) 0755);
       
@@ -86,11 +86,20 @@ public class FSDownload implements Callable<Path> {
     this(files, ugi, conf, destDirPath, resource, null);
   }
 
+  /**
+   * 
+   * @param files
+   * @param ugi
+   * @param conf
+   * @param destDirPath 文件最终下载到本地的什么地方存储
+   * @param resource 要下载hdfs或者本地的原始文件路径
+   * @param statCache
+   */
   public FSDownload(FileContext files, UserGroupInformation ugi, Configuration conf,
       Path destDirPath, LocalResource resource,
       LoadingCache<Path,Future<FileStatus>> statCache) {
     this.conf = conf;
-    this.destDirPath = destDirPath;//下载的目标目录和文件名
+    this.destDirPath = destDirPath;//下载的后,存储的位置
     this.files = files;
     this.userUgi = ugi;
     this.resource = resource;//待下载的本地资源

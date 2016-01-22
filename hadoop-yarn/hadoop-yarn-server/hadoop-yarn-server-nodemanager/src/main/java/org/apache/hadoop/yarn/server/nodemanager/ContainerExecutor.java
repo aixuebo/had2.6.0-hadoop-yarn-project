@@ -148,6 +148,7 @@ public abstract class ContainerExecutor implements Configurable {
       Signal signal)
       throws IOException;
 
+  //删除是该user所属的文件
   public abstract void deleteAsUser(String user, Path subDir, Path... basedirs)
       throws IOException, InterruptedException;
 

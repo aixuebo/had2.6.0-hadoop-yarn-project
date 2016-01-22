@@ -641,6 +641,7 @@ public class YarnConfiguration extends Configuration {
   /**
    * Number of files in each localized directories
    * Avoid tuning this too low. 
+   * 每一个目录最多存储多少个文件,不允许小于36个
    */
   public static final String NM_LOCAL_CACHE_MAX_FILES_PER_DIRECTORY =
     NM_PREFIX + "local-cache.max-files-per-directory";
@@ -653,7 +654,9 @@ public class YarnConfiguration extends Configuration {
   public static final String DEFAULT_NM_LOCALIZER_ADDRESS = "0.0.0.0:" +
     DEFAULT_NM_LOCALIZER_PORT;
   
-  /** Interval in between cache cleanups.*/
+  /** Interval in between cache cleanups.
+   *  清理缓存的周期时间,以及默认时间为10分钟
+   **/
   public static final String NM_LOCALIZER_CACHE_CLEANUP_INTERVAL_MS =
     NM_PREFIX + "localizer.cache.cleanup.interval-ms";
   public static final long DEFAULT_NM_LOCALIZER_CACHE_CLEANUP_INTERVAL_MS = 

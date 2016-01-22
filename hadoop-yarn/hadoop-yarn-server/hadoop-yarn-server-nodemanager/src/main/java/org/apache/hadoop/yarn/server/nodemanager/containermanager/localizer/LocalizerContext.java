@@ -35,6 +35,7 @@ public class LocalizerContext {
   private final String user;//容器所有者
   private final ContainerId containerId;//容器ID
   private final Credentials credentials;
+  
   private final LoadingCache<Path,Future<FileStatus>> statCache;//通过该方法,可以获取一个path对象对应的FileStatus对象,是Future模式
 
   public LocalizerContext(String user, ContainerId containerId,

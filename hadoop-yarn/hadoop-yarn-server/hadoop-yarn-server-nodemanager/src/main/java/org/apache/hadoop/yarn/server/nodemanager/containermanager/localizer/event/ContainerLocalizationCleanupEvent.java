@@ -31,8 +31,7 @@ public class ContainerLocalizationCleanupEvent extends ContainerLocalizationEven
 
   /**
    * 该容器所持有的所有资源
-   * 即，每个可见性下面有资源集合
-   * 
+   * 即每个可见性下面有资源集合
    */
   private final Map<LocalResourceVisibility, Collection<LocalResourceRequest>> rsrc; 
 

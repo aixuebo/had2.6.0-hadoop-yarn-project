@@ -26,13 +26,18 @@ import org.apache.hadoop.yarn.server.nodemanager.containermanager.localizer.even
 
 /**
  * Component tracking resources all of the same {@link LocalResourceVisibility}
+ * 表示管理本地资源,不同可见性,持有一个该对象
+ * 题外话:
  * 根据可见性,每个可见性拥有一个该对象
  * 1.public的单独拥有一个该对象
  * 2.PRIVATE的每一个user对应一个该对象
  * 3.APPLICATION的每一个应用对应一个该对象
+ * 
+ * 该对象是一个容器,因此要保持若干个LocalizedResource对象
  */
 interface LocalResourcesTracker extends EventHandler<ResourceEvent>, Iterable<LocalizedResource> {
 
+	//该容器删除一个资源LocalizedResource
   boolean remove(LocalizedResource req, DeletionService delService);
 
   Path getPathForLocalization(LocalResourceRequest req, Path localDirPath);

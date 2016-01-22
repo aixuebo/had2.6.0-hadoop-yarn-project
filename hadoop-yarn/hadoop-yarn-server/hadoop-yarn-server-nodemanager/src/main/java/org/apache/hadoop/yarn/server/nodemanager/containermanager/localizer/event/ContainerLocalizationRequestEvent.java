@@ -34,6 +34,7 @@ import org.apache.hadoop.yarn.server.nodemanager.containermanager.localizer.Reso
 public class ContainerLocalizationRequestEvent extends
     ContainerLocalizationEvent {
 
+	//该容器需要的资源集合,根据可见性分组
   private final Map<LocalResourceVisibility, Collection<LocalResourceRequest>> 
     rsrc;
 

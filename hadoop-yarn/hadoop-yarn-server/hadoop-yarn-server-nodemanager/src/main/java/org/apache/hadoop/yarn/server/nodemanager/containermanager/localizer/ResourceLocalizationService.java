@@ -147,7 +147,7 @@ public class ResourceLocalizationService extends CompositeService
   public static final String NM_PRIVATE_DIR = "nmPrivate";
   public static final FsPermission NM_PRIVATE_PERM = new FsPermission((short) 0700);
 
-  private Server server;
+  private Server server;//实现LocalizationProtocol的RPC接口,服务器的地址是localizationServerAddress
   private InetSocketAddress localizationServerAddress;//本节点的服务
   private long cacheTargetSize;//本地化缓存的目标大小,单位M,
   private long cacheCleanupPeriod;//清理缓存的周期时间
@@ -157,19 +157,24 @@ public class ResourceLocalizationService extends CompositeService
   private final DeletionService delService;
   private LocalizerTracker localizerTracker;
   private RecordFactory recordFactory;
-  private final ScheduledExecutorService cacheCleanup;
+  private final ScheduledExecutorService cacheCleanup;//定期执行CacheCleanup,清理内存空间
   private LocalizerTokenSecretManager secretManager;
   private NMStateStoreService stateStore;//存储日志行为,便于恢复
-
-  private LocalResourcesTracker publicRsrc;
 
   private LocalDirsHandlerService dirsHandler;
   private Context nmContext;//NodeManager的上下问
 
   /**
+   * 公开的资源下载器,所有用户和应用共享该资源管理器
+   */
+  private LocalResourcesTracker publicRsrc;
+  
+  /**
    * Map of LocalResourceTrackers keyed by username, for private
    * resources.
    * key:user,value:LocalResourcesTrackerImpl
+   * 私有的资源下载器,每一个userName对应一个该下载器
+   * key是userName,value是对应的下载器
    */
   private final ConcurrentMap<String,LocalResourcesTracker> privateRsrc = new ConcurrentHashMap<String,LocalResourcesTracker>();
 
@@ -177,6 +182,8 @@ public class ResourceLocalizationService extends CompositeService
    * Map of LocalResourceTrackers keyed by appid, for application
    * resources.
    * key:appId,value:LocalResourcesTrackerImpl
+   * 应用的资源下载器,每一个应用对应一个该下载器
+   * key是应用id,格式是application_1439549102823_0906,value是资源下载器
    */
   private final ConcurrentMap<String,LocalResourcesTracker> appRsrc = new ConcurrentHashMap<String,LocalResourcesTracker>();
   
@@ -228,7 +235,7 @@ public class ResourceLocalizationService extends CompositeService
 
   @Override
   public void serviceInit(Configuration conf) throws Exception {
-    this.validateConf(conf);
+    this.validateConf(conf);//校验每个目录的文件极限不能少于36个
     this.publicRsrc = new LocalResourcesTrackerImpl(null, null, dispatcher,true, conf, stateStore);
     this.recordFactory = RecordFactoryProvider.getRecordFactory(conf);
 
@@ -236,13 +243,14 @@ public class ResourceLocalizationService extends CompositeService
       lfs = getLocalFileContext(conf);
       lfs.setUMask(new FsPermission((short) FsPermission.DEFAULT_UMASK));
 
+      //不是恢复操作,或者这次操作是第一次操作,则要清空目录
       if (!stateStore.canRecover()|| stateStore.isNewlyCreated()) {
         //初始化,清理本地目录
-        cleanUpLocalDirs(lfs, delService);
+        cleanUpLocalDirs(lfs, delService);//异步删除现有目录,先改名,在删除
         //初始化本地目录
-        initializeLocalDirs(lfs);
+        initializeLocalDirs(lfs);//创建目录并且赋予权限
         //初始化日志目录
-        initializeLogDirs(lfs);
+        initializeLogDirs(lfs);//创建目录并且赋予权限
       }
     } catch (Exception e) {
       throw new YarnRuntimeException(
@@ -251,8 +259,11 @@ public class ResourceLocalizationService extends CompositeService
 
     cacheTargetSize =
       conf.getLong(YarnConfiguration.NM_LOCALIZER_CACHE_TARGET_SIZE_MB, YarnConfiguration.DEFAULT_NM_LOCALIZER_CACHE_TARGET_SIZE_MB) << 20;
+    
+    //清理缓存的周期时间
     cacheCleanupPeriod =
       conf.getLong(YarnConfiguration.NM_LOCALIZER_CACHE_CLEANUP_INTERVAL_MS, YarnConfiguration.DEFAULT_NM_LOCALIZER_CACHE_CLEANUP_INTERVAL_MS);
+    
     localizationServerAddress = conf.getSocketAddr(
         YarnConfiguration.NM_BIND_HOST,
         YarnConfiguration.NM_LOCALIZER_ADDRESS,
@@ -333,6 +344,9 @@ public class ResourceLocalizationService extends CompositeService
     // TODO: remove untracked directories in local filesystem
   }
 
+  /**
+   * 处理该容器发过来的心跳信息
+   */
   @Override
   public LocalizerHeartbeatResponse heartbeat(LocalizerStatus status) {
     return localizerTracker.processHeartbeat(status);
@@ -340,10 +354,14 @@ public class ResourceLocalizationService extends CompositeService
 
   @Override
   public void serviceStart() throws Exception {
+	  //定期执行清理内存空间线程
     cacheCleanup.scheduleWithFixedDelay(new CacheCleanup(dispatcher),
         cacheCleanupPeriod, cacheCleanupPeriod, TimeUnit.MILLISECONDS);
+    
+    //创建LocalizationProtocol服务
     server = createServer();
     server.start();
+    
     localizationServerAddress =
         getConfig().updateConnectAddr(YarnConfiguration.NM_BIND_HOST,
                                       YarnConfiguration.NM_LOCALIZER_ADDRESS,
@@ -388,11 +406,14 @@ public class ResourceLocalizationService extends CompositeService
     super.serviceStop();
   }
 
+  /**
+   * 对资源的初始化事件的处理
+   */
   @Override
   public void handle(LocalizationEvent event) {
     // TODO: create log dir as $logdir/$user/$appId
     switch (event.getType()) {
-    case INIT_APPLICATION_RESOURCES:
+    case INIT_APPLICATION_RESOURCES://一个应用要在本地进行初始化
       handleInitApplicationResources(((ApplicationLocalizationEvent)event).getApplication());
       break;
     case INIT_CONTAINER_RESOURCES:
@@ -414,19 +435,24 @@ public class ResourceLocalizationService extends CompositeService
   
   /**
    * Handle event received the first time any container is scheduled by a given application.
-   * 通过一个应用初始化容器
+   * 该事件表示一个应用第一次接收到任何容器的时候会触发该事件
+   * 一个应用要在本地进行初始化
    */
   @SuppressWarnings("unchecked")
   private void handleInitApplicationResources(Application app) {
     // 0) Create application tracking structs
     String userName = app.getUser();
+    //私有的资源下载器,每一个userName对应一个该下载器
     privateRsrc.putIfAbsent(userName, new LocalResourcesTrackerImpl(userName,null, dispatcher, true, super.getConfig(), stateStore));
+    
+    //应用的资源下载器,每一个应用对应一个该下载器
     String appIdStr = ConverterUtils.toString(app.getAppId());
     appRsrc.putIfAbsent(appIdStr, new LocalResourcesTrackerImpl(app.getUser(),app.getAppId(), dispatcher, false, super.getConfig(), stateStore));
     // 1) Signal container init
     //
     // This is handled by the ApplicationImpl state machine and allows
     // containers to proceed with launching.
+    //发送事件,表示已经完成应用的初始化任务
     dispatcher.getEventHandler().handle(new ApplicationInitedEvent(app.getAppId()));
   }
   
@@ -434,6 +460,9 @@ public class ResourceLocalizationService extends CompositeService
    * For each of the requested resources for a container, determines the
    * appropriate {@link LocalResourcesTracker} and forwards a 
    * {@link LocalResourceRequest} to that tracker.
+   * 循环该容器需要的每一个资源请求
+   * 
+   * 发送下载资源请求即可
    */
   private void handleInitContainerResources(ContainerLocalizationRequestEvent rsrcReqs) {
     Container c = rsrcReqs.getContainer();
@@ -449,15 +478,15 @@ public class ResourceLocalizationService extends CompositeService
     //为该容器创建LocalizerContext对象
     LocalizerContext ctxt = new LocalizerContext(c.getUser(), c.getContainerId(), c.getCredentials(), statCache);
     
-    //该容器所需要的资源,按照可见性分组了
+    //该容器所需要的资源,已经按照可见性分组了
     Map<LocalResourceVisibility, Collection<LocalResourceRequest>> rsrcs = rsrcReqs.getRequestedResources();
       
     for (Map.Entry<LocalResourceVisibility, Collection<LocalResourceRequest>> e : rsrcs.entrySet()) {
-      //获取该可见性的LocalResourcesTracker对象
+      //获取该可见性的LocalResourcesTracker对象,可见性可以根据是否是public以及user、application来区分
       LocalResourcesTracker tracker = getLocalResourcesTracker(e.getKey(), c.getUser(),
               c.getContainerId().getApplicationAttemptId()
                   .getApplicationId());
-      for (LocalResourceRequest req : e.getValue()) {
+      for (LocalResourceRequest req : e.getValue()) {//发送下载资源请求
         tracker.handle(new ResourceRequestEvent(req, e.getKey(), ctxt));
       }
     }
@@ -465,6 +494,8 @@ public class ResourceLocalizationService extends CompositeService
 
   /**
    * 周期的执行该方法,进行清理缓存目录
+   * 
+   * 清理公共空间和user私人空间,应用级别的空间不会被清理
    */
   private void handleCacheCleanup(LocalizationEvent event) {
     ResourceRetentionSet retain = new ResourceRetentionSet(delService, cacheTargetSize);
@@ -484,17 +515,20 @@ public class ResourceLocalizationService extends CompositeService
   @SuppressWarnings("unchecked")
   private void handleCleanupContainerResources(ContainerLocalizationCleanupEvent rsrcCleanup) {
     Container c = rsrcCleanup.getContainer();
-    //该容器下的所有资源,即，每个可见性下面有资源集合
+    //该容器下的所有资源,即每个可见性下面有资源集合
     Map<LocalResourceVisibility, Collection<LocalResourceRequest>> rsrcs = rsrcCleanup.getResources();
       
     for (Map.Entry<LocalResourceVisibility, Collection<LocalResourceRequest>> e : rsrcs.entrySet()) {
+      //查询该资源所在的跟踪器
       LocalResourcesTracker tracker = getLocalResourcesTracker(e.getKey(), c.getUser(), 
           c.getContainerId().getApplicationAttemptId()
           .getApplicationId());
-      for (LocalResourceRequest req : e.getValue()) {
+      for (LocalResourceRequest req : e.getValue()) {//获取该容器在该资源管理器中所以对应的等待下载的资源
+    	  //发送释放该资源的事件
         tracker.handle(new ResourceReleaseEvent(req,c.getContainerId()));
       }
     }
+    
     String locId = ConverterUtils.toString(c.getContainerId());
     localizerTracker.cleanupPrivLocalizers(locId);
     
@@ -508,6 +542,10 @@ public class ResourceLocalizationService extends CompositeService
     // a dir might have become good while the app was running.
     // Check if the container dir exists and if it does, try to delete it
 
+    /**
+     * 1.删除该容器目录,即/localDir/usercache/user/appcache/appId/containerID
+     * 2.删除该容器所对应的私有文件夹,--该appId--该容器Id对应的文件夹内容,localDir/nmPrivate/appID/containerID
+     */
     for (String localDir : dirsHandler.getLocalDirsForCleanup()) {
       // Delete the user-owned container-dir
       Path usersdir = new Path(localDir, ContainerLocalizer.USERCACHE);//localDir/usercache
@@ -515,6 +553,8 @@ public class ResourceLocalizationService extends CompositeService
       Path allAppsdir = new Path(userdir, ContainerLocalizer.APPCACHE);//localDir/usercache/user/appcache
       Path appDir = new Path(allAppsdir, appIDStr);//localDir/usercache/user/appcache/appId
       Path containerDir = new Path(appDir, containerIDStr);//localDir/usercache/user/appcache/appId/containerID
+      
+      //删除属于该user--该appId--该容器Id对应的文件夹内容
       submitDirForDeletion(userName, containerDir);//删除该容器目录,即/localDir/usercache/user/appcache/appId/containerID
 
       // Delete the nmPrivate container-dir
@@ -522,9 +562,11 @@ public class ResourceLocalizationService extends CompositeService
       Path sysDir = new Path(localDir, NM_PRIVATE_DIR);//localDir/nmPrivate
       Path appSysDir = new Path(sysDir, appIDStr);//localDir/nmPrivate/appID
       Path containerSysDir = new Path(appSysDir, containerIDStr);//localDir/nmPrivate/appID/containerID
+      //删除该容器所对应的私有文件夹,--该appId--该容器Id对应的文件夹内容
       submitDirForDeletion(null, containerSysDir);//删除该容器的私有目录
     }
 
+    //发送容器资源已经清理完成
     dispatcher.getEventHandler().handle(
         new ContainerEvent(c.getContainerId(),
             ContainerEventType.CONTAINER_RESOURCES_CLEANEDUP));
@@ -546,18 +588,24 @@ public class ResourceLocalizationService extends CompositeService
   }
 
 
+  /**
+   * 当一个应用彻底完成后,调用该函数
+   */
   @SuppressWarnings({"unchecked"})
   private void handleDestroyApplicationResources(Application application) {
     String userName = application.getUser();
     ApplicationId appId = application.getAppId();
     String appIDStr = application.toString();
+    
+    //查看app级别的资源管理器
     LocalResourcesTracker appLocalRsrcsTracker =
       appRsrc.remove(ConverterUtils.toString(appId));
     if (appLocalRsrcsTracker != null) {
-      for (LocalizedResource rsrc : appLocalRsrcsTracker ) {
+      for (LocalizedResource rsrc : appLocalRsrcsTracker ) {//循环app级别的资源管理器下所有的资源
         Path localPath = rsrc.getLocalPath();
         if (localPath != null) {
           try {
+        	  //记录日志
             stateStore.removeLocalizedResource(userName, appId, localPath);
           } catch (IOException e) {
             LOG.error("Unable to remove resource " + rsrc + " for " + appIDStr
@@ -579,12 +627,14 @@ public class ResourceLocalizationService extends CompositeService
       Path usersdir = new Path(localDir, ContainerLocalizer.USERCACHE);
       Path userdir = new Path(usersdir, userName);
       Path allAppsdir = new Path(userdir, ContainerLocalizer.APPCACHE);
-      Path appDir = new Path(allAppsdir, appIDStr);
+      Path appDir = new Path(allAppsdir, appIDStr);//$localDir/usercache/$user/appcache/$appid
+      //删除$localDir/usercache/$user/appcache/$appid下所有文件
       submitDirForDeletion(userName, appDir);
 
       // Delete the nmPrivate app-dir
       Path sysDir = new Path(localDir, NM_PRIVATE_DIR);
-      Path appSysDir = new Path(sysDir, appIDStr);
+      Path appSysDir = new Path(sysDir, appIDStr);//$localDir/nmPrivate/$appid
+      //删除$localDir/nmPrivate/$appid下所有数据
       submitDirForDeletion(null, appSysDir);
     }
 
@@ -606,13 +656,13 @@ public class ResourceLocalizationService extends CompositeService
       case PUBLIC:
         return publicRsrc;
       case PRIVATE:
-        return privateRsrc.get(user);
+        return privateRsrc.get(user);//获取该user的资源下载器
       case APPLICATION:
-        return appRsrc.get(ConverterUtils.toString(appId));
+        return appRsrc.get(ConverterUtils.toString(appId));//获取该应用的资源下载器
     }
   }
 
-  //.usercache/user/filecache
+  //./usercache/user/filecache
   private String getUserFileCachePath(String user) {
     return StringUtils.join(Path.SEPARATOR, Arrays.asList(".",
       ContainerLocalizer.USERCACHE, user, ContainerLocalizer.FILECACHE));
@@ -669,10 +719,13 @@ public class ResourceLocalizationService extends CompositeService
       super.serviceStart();
     }
 
+    /**
+     * 处理该容器发过来的心跳信息
+     */
     public LocalizerHeartbeatResponse processHeartbeat(LocalizerStatus status) {
       String locId = status.getLocalizerId();
       synchronized (privLocalizers) {
-        LocalizerRunner localizer = privLocalizers.get(locId);
+        LocalizerRunner localizer = privLocalizers.get(locId);//找到对应的容器下载类
         if (null == localizer) {
           // TODO process resources anyway
           LOG.info("Unknown localizer with localizerId " + locId
@@ -792,11 +845,11 @@ public class ResourceLocalizationService extends CompositeService
        * If not we will skip this resource as either it is getting downloaded
        * or it FAILED / LOCALIZED.
        */
-
       if (rsrc.tryAcquire()) {
         if (rsrc.getState().equals(ResourceState.DOWNLOADING)) {
           LocalResource resource = request.getResource().getRequest();//待下载的原始文件
           try {
+        	  //申请size大小的资源空间,让下载后的资源存放进去
             Path publicRootPath =
                 dirsHandler.getLocalPathForWrite("." + Path.SEPARATOR
                     + ContainerLocalizer.FILECACHE,
@@ -887,6 +940,7 @@ public class ResourceLocalizationService extends CompositeService
    * Runs the {@link ContainerLocalizer} itself in a separate process with
    * access to user's credentials. One {@link LocalizerRunner} per localizerId.
    * 私有资源下载服务
+   * 每一个user或者app应用都持有一个该对象
    */
   class LocalizerRunner extends Thread {
 
@@ -958,6 +1012,10 @@ public class ResourceLocalizationService extends CompositeService
       }
     }
 
+    /**
+     * 处理该容器发过来的心跳信息
+     * 此时容器发过来该容器已经下载的资源信息
+     */
     LocalizerHeartbeatResponse update(List<LocalResourceStatus> remoteResourceStatuses) {
         
       LocalizerHeartbeatResponse response = recordFactory.newRecordInstance(LocalizerHeartbeatResponse.class);
@@ -1202,6 +1260,9 @@ public class ResourceLocalizationService extends CompositeService
 
   }
 
+  /**
+   * cacheCleanupPeriod周期内,定期清理内存空间
+   */
   static class CacheCleanup extends Thread {
 
     private final Dispatcher dispatcher;
@@ -1221,7 +1282,10 @@ public class ResourceLocalizationService extends CompositeService
 
   /**
    * 初始化本地目录
-   * 为每一个目录设置权限,并且返回
+   * 创建以下三个目录,并且赋予一定权限
+   * localDir/usercache
+   * localDir/filecache
+   * localDir/nmPrivate
    */
   private void initializeLocalDirs(FileContext lfs) {
     List<String> localDirs = dirsHandler.getLocalDirs();
@@ -1230,10 +1294,21 @@ public class ResourceLocalizationService extends CompositeService
     }
   }
 
+  /**
+   * 创建以下三个目录,并且赋予一定权限
+   * localDir/usercache
+   * localDir/filecache
+   * localDir/nmPrivate
+   * @param lfs
+   * @param localDir
+   */
   private void initializeLocalDir(FileContext lfs, String localDir) {
 
     /**
      * 为每一个目录设置权限,并且返回
+     * localDir/usercache FsPermission
+     * localDir/filecache FsPermission
+     * localDir/nmPrivate FsPermission
      */
     Map<Path, FsPermission> pathPermissionMap = getLocalDirsPathPermissionsMap(localDir);
     for (Map.Entry<Path, FsPermission> entry : pathPermissionMap.entrySet()) {
@@ -1249,6 +1324,8 @@ public class ResourceLocalizationService extends CompositeService
         LOG.warn(msg, ie);
         throw new YarnRuntimeException(msg, ie);
       }
+      
+      //如果目录不存在,则创建该目录
       if(status == null) {
         try {
           lfs.mkdir(entry.getKey(), entry.getValue(), true);
@@ -1308,7 +1385,18 @@ public class ResourceLocalizationService extends CompositeService
   }
 
   /**
-   * 删除localDir下文件
+   * 删除localDir下以下文件
+$localDir/usercache
+$localDir/filecache
+$localDir/nmPrivate
+
+实现逻辑:
+1.对文件进行改名字
+$localDir/usercache_DEL_时间戳
+$localDir/filecache_DEL_时间戳
+$localDir/nmPrivate_DEL_时间戳
+2.删除_DEL_.*文件
+
    */
   private void cleanUpLocalDir(FileContext lfs, DeletionService del,String localDir) {
     long currentTimeStamp = System.currentTimeMillis();
@@ -1324,7 +1412,10 @@ public class ResourceLocalizationService extends CompositeService
   }
 
   /**
-   * 将localDir/localSubDir 改名为localDir/localSubDir_DEL_currentTimeStamp
+对文件进行改名字
+$localDir/usercache_DEL_时间戳
+$localDir/filecache_DEL_时间戳
+$localDir/nmPrivate_DEL_时间戳
    */
   private void renameLocalDir(FileContext lfs, String localDir,String localSubDir, long currentTimeStamp) {
     try {
@@ -1370,24 +1461,29 @@ public class ResourceLocalizationService extends CompositeService
     }
   }
 
+  /**
+   * 删除userDirPath下文件,该文件夹下仅仅删除跟当前用户有关的文件
+   */
   private void cleanUpFilesPerUserDir(FileContext lfs, DeletionService del,Path userDirPath) throws IOException {
-    RemoteIterator<FileStatus> userDirStatus = lfs.listStatus(userDirPath);
+    RemoteIterator<FileStatus> userDirStatus = lfs.listStatus(userDirPath);//查找所有子目录
+    //建立异步删除文件对象任务,采用绝对路径方式删除userDirPath下文件
     FileDeletionTask dependentDeletionTask = del.createFileDeletionTask(null, userDirPath, new Path[] {});
-    if (userDirStatus != null && userDirStatus.hasNext()) {
-      List<FileDeletionTask> deletionTasks = new ArrayList<FileDeletionTask>();
-      while (userDirStatus.hasNext()) {
+    
+    if (userDirStatus != null && userDirStatus.hasNext()) {//有子目录,则查找指定user的目录,然后删除掉
+      List<FileDeletionTask> deletionTasks = new ArrayList<FileDeletionTask>();//创建子任务
+      while (userDirStatus.hasNext()) {//遍历所有子目录
         FileStatus status = userDirStatus.next();
-        String owner = status.getOwner();
+        String owner = status.getOwner();//该文件的所有者
         FileDeletionTask deletionTask =
             del.createFileDeletionTask(owner, null,
               new Path[] { status.getPath() });
-        deletionTask.addFileDeletionTaskDependency(dependentDeletionTask);
+        deletionTask.addFileDeletionTaskDependency(dependentDeletionTask);//该语法在此处没任何意义
         deletionTasks.add(deletionTask);
       }
       for (FileDeletionTask task : deletionTasks) {
         del.scheduleFileDeletionTask(task);
       }
-    } else {
+    } else {//没有子目录,则将userDirPath目录删除
       del.scheduleFileDeletionTask(dependentDeletionTask);
     }
   }
@@ -1461,6 +1557,10 @@ public class ResourceLocalizationService extends CompositeService
 
   /**
    * 为每一个目录设置权限,并且返回
+   * 为以下三个目录设置权限
+   * localDir/usercache FsPermission
+   * localDir/filecache FsPermission
+   * localDir/nmPrivate FsPermission
    */
   private Map<Path, FsPermission> getLocalDirsPathPermissionsMap(String localDir) {
     Map<Path, FsPermission> localDirPathFsPermissionsMap = new HashMap<Path, FsPermission>();
@@ -1469,9 +1569,9 @@ public class ResourceLocalizationService extends CompositeService
     FsPermission nmPrivatePermission = NM_PRIVATE_PERM.applyUMask(lfs.getUMask());
         
 
-    Path userDir = new Path(localDir, ContainerLocalizer.USERCACHE);
-    Path fileDir = new Path(localDir, ContainerLocalizer.FILECACHE);
-    Path sysDir = new Path(localDir, NM_PRIVATE_DIR);
+    Path userDir = new Path(localDir, ContainerLocalizer.USERCACHE);//localDir/usercache
+    Path fileDir = new Path(localDir, ContainerLocalizer.FILECACHE);//localDir/filecache
+    Path sysDir = new Path(localDir, NM_PRIVATE_DIR);//localDir/nmPrivate
 
     localDirPathFsPermissionsMap.put(userDir, defaultPermission);
     localDirPathFsPermissionsMap.put(fileDir, defaultPermission);

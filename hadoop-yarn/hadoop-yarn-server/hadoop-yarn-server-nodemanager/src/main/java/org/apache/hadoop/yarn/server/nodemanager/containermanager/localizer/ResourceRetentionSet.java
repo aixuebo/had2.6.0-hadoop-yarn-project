@@ -29,6 +29,8 @@ import org.apache.hadoop.yarn.server.nodemanager.DeletionService;
 /**
  * 资源保留,定期删除已经没有引用的资源,避免资源大小过大
  * 当接收到LocalizationEventType.CACHE_CLEANUP事件时,调用ResourceLocalizationService的handleCacheCleanup方法
+ * 
+ * 清理公共空间和user私人空间,应用级别的空间不会被清理
  */
 public class ResourceRetentionSet {
 
@@ -36,6 +38,8 @@ public class ResourceRetentionSet {
   private long currentSize;//当前还有多少磁盘
   private final long targetSize;//磁盘最多不允许超过该值
   private final DeletionService delService;
+  
+  //key是资源,value是资源所在容器
   private final SortedMap<LocalizedResource,LocalResourcesTracker> retain;//排序,按照资源的常用与否顺序
 
   ResourceRetentionSet(DeletionService delService, long targetSize) {
@@ -60,7 +64,7 @@ public class ResourceRetentionSet {
    * @param newTracker
    */
   public void addResources(LocalResourcesTracker newTracker) {
-    for (LocalizedResource resource : newTracker) {
+    for (LocalizedResource resource : newTracker) {//循环该容器的所有LocalizedResource资源
       currentSize += resource.getSize();
       if (resource.getRefCount() > 0) {
         // always retain resources in use 还有引用,说明不允许删除,则永远保持保留
@@ -73,8 +77,8 @@ public class ResourceRetentionSet {
      */
     for (Iterator<Map.Entry<LocalizedResource,LocalResourcesTracker>> i = retain.entrySet().iterator();currentSize - delSize > targetSize && i.hasNext();) {
       Map.Entry<LocalizedResource,LocalResourcesTracker> rsrc = i.next();
-      LocalizedResource resource = rsrc.getKey();
-      LocalResourcesTracker tracker = rsrc.getValue();
+      LocalizedResource resource = rsrc.getKey();//资源
+      LocalResourcesTracker tracker = rsrc.getValue();//资源所在容器
       if (tracker.remove(resource, delService)) {
         delSize += resource.getSize();
         i.remove();
