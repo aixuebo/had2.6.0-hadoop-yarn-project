@@ -1,0 +1,132 @@
+-全局的配置信息--------------------------
+<allocations>
+  <queue></queue>
+  <pool></pool>
+
+  <user name="name">
+	<maxRunningApps>int</maxRunningApps>
+  </user>
+
+  <userMaxAppsDefault>
+	<xxxx>int</xxxx>	
+  </userMaxAppsDefault>
+
+  <defaultFairSharePreemptionTimeout>
+	  <xxx>long</xxx>
+  </defaultFairSharePreemptionTimeout>
+
+  <fairSharePreemptionTimeout>
+	  <xxx>long</xxx>
+  </fairSharePreemptionTimeout>
+
+  <defaultMinSharePreemptionTimeout>
+	  <xxx>long</xxx>
+  </defaultMinSharePreemptionTimeout>
+
+  <defaultFairSharePreemptionThreshold>
+	  <xxx>float</xxx>
+  </defaultFairSharePreemptionThreshold>
+
+  <queueMaxAppsDefault>
+	  <xxx>int</xxx>
+  </queueMaxAppsDefault>
+
+  <queueMaxAMShareDefault>
+	  <xxx>float</xxx>
+  </queueMaxAMShareDefault>
+
+  <defaultQueueSchedulingPolicy>
+	  <xxx>String</xxx>
+  </defaultQueueSchedulingPolicy>
+
+  <defaultQueueSchedulingMode>
+	  <xxx>String</xxx>
+  </defaultQueueSchedulingMode>
+
+  <queuePlacementPolicy>
+  </queuePlacementPolicy>
+</allocations>
+
+
+注意:
+0.该文件以allocations为根节点
+1.queue与pool标签意义是等同的
+  该标签下面存储的是一个Element元素,会进一步被解析
+2.user.maxRunningApps一定有int值,user有且只有一个maxRunningApps子节点
+3.userMaxAppsDefault下面一定有一个子节点,但是名字无所谓,关键是int值都会被解析
+4.defaultFairSharePreemptionTimeout下面一定有一个子节点,但是名字无所谓,关键是long值都会被解析
+5.fairSharePreemptionTimeout面一定有一个子节点,但是名字无所谓,关键是long值都会被解析
+  该值只有在defaultFairSharePreemptionTimeout== Long.MAX_VALUE的时候才有意义,有意义的时候获取该值后*1000L;
+  然后取代defaultFairSharePreemptionTimeout值
+6.defaultMinSharePreemptionTimeout面一定有一个子节点,但是名字无所谓,关键是long值都会被解析
+  该值获取后,代码里面 * 1000L;然后才被使用
+7.defaultFairSharePreemptionThreshold面一定有一个子节点,但是名字无所谓,关键是float值都会被解析,该值要在0.0-1.0之间
+8.queueMaxAppsDefault面一定有一个子节点,但是名字无所谓,关键是int值都会被解析
+9.queueMaxAMShareDefault下面一定有一个子节点,但是名字无所谓,关键是float值都会被解析,该值要大于1.0
+10.defaultQueueSchedulingMode与defaultQueueSchedulingPolicy标签意义是等同的
+   下面一定有一个子节点,但是名字无所谓,关键是String值都会被解析,该值的字符串是SchedulingPolicy.parse(text),即是代理的字符串名称
+11.queuePlacementPolicy该标签下面存储的是一个Element元素,会进一步被解析
+
+--针对queue队列特殊解析---------------------------------------------------
+  <queue name="",type='parent'>
+	  <minResources>
+		<xxx>String</xxx>
+	  </minResources>
+	  <maxResources>
+		<xxx>String</xxx>
+	  </maxResources>
+	  <maxRunningApps>
+		<xxx>int</xxx>
+	  </maxRunningApps>
+	  <maxAMShare>
+		<xxx>float</xxx>
+	  </maxAMShare>
+	  <weight>
+		<xxx>double</xxx>
+	  </weight>
+	  <minSharePreemptionTimeout>
+		<xxx>long</xxx>
+	  </minSharePreemptionTimeout>
+	  <fairSharePreemptionTimeout>
+		<xxx>long</xxx>
+	  </fairSharePreemptionTimeout>
+	  <fairSharePreemptionThreshold>
+		<xxx>float</xxx>
+	  </fairSharePreemptionThreshold>
+	  <schedulingPolicy>
+		<xxx>String</xxx>
+	  </schedulingPolicy>
+	  <schedulingMode>
+		<xxx>String</xxx>
+	  </schedulingMode>
+	  <aclSubmitApps>
+		<xxx>String</xxx>
+	  </aclSubmitApps>
+	  <aclAdministerApps>
+		<xxx>String</xxx>
+	  </aclAdministerApps>
+	  <queue>
+	  </queue>
+	  <pool>
+	  </pool>
+  </queue>
+0.特别关注
+a.如果是叶子节点,但是标签存储了type='parent',则也将叶子节点标志位父节点.如果没有这个限制,则type='parent'取消即可
+b.如果pool或者queue的name是root,则表示仅能有一个root节点,剩下的所有pool或者queue都只能被嵌套在root元素里面,不允许跟root同级别。
+  同时root里面嵌套的是有name是要父子的name连接起来作为队列的name的。
+  如果不是叫做root的元素,则表示根节点下可以有任意多个pool或者queue标签,同时pool或者queue里面嵌套pool或者queue的时候,不存在父子关系,即name不需要连接起来
+1.minResources标签下面一定有一个子节点,但是名字无所谓,关键是String值都会被解析,该值的字符串是Resource val = FairSchedulerConfiguration.parseResourceConfigValue(text);
+2.maxResources标签下面一定有一个子节点,但是名字无所谓,关键是String值都会被解析,该值的字符串是Resource val = FairSchedulerConfiguration.parseResourceConfigValue(text);
+3.maxRunningApps标签下面一定有一个子节点,但是名字无所谓,关键是int值都会被解析
+4.maxAMShare标签下面一定有一个子节点,但是名字无所谓,关键是float值都会被解析,该值要大于1.0
+5.weight标签下面一定有一个子节点,但是名字无所谓,关键是double值都会被解析,该值会被进行如下解析new ResourceWeights((float)val)
+6.minSharePreemptionTimeout标签下面一定有一个子节点,但是名字无所谓,关键是long值都会被解析,并且使用的时候是该值*1000L
+7.fairSharePreemptionTimeout标签下面一定有一个子节点,但是名字无所谓,关键是long值都会被解析,并且使用的时候是该值*1000L
+8.fairSharePreemptionThreshold标签下面一定有一个子节点,但是名字无所谓,关键是float值都会被解析,该值是0.0-1.0之间
+9.schedulingPolicy与schedulingMode标签意义一样,标签下面一定有一个子节点,但是名字无所谓,关键是String值都会被解析,
+  该字符串可以进行如下转换:SchedulingPolicy policy = SchedulingPolicy.parse(text);
+10.aclSubmitApps标签意义一样,标签下面一定有一个子节点,但是名字无所谓,关键是String值都会被解析,
+  该字符串可以进行如下转换:new AccessControlList(text),对应的是QueueACL.SUBMIT_APPLICATIONS提交权限
+11.aclAdministerApps标签意义一样,标签下面一定有一个子节点,但是名字无所谓,关键是String值都会被解析,
+    该字符串可以进行如下转换:new AccessControlList(text),对应的是QueueACL.ADMINISTER_QUEUE管理权限
+12.pool和queue标签表示递归操作
