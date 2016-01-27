@@ -50,7 +50,6 @@ import com.google.common.util.concurrent.ThreadFactoryBuilder;
  * The launcher for the containers. This service should be started only after
  * the {@link ResourceLocalizationService} is started as it depends on creation
  * of system directories on the local file-system.
- * 
  */
 public class ContainersLauncher extends AbstractService
     implements EventHandler<ContainersLauncherEvent> {
@@ -63,12 +62,16 @@ public class ContainersLauncher extends AbstractService
   private final ContainerManagerImpl containerManager;
 
   private LocalDirsHandlerService dirsHandler;
+  
+  //运行每一个容器的服务
   @VisibleForTesting
   public ExecutorService containerLauncher =
     Executors.newCachedThreadPool(
         new ThreadFactoryBuilder()
           .setNameFormat("ContainersLauncher #%d")
           .build());
+  
+  //key是容器ID,value是运行该容器的进程对象
   @VisibleForTesting
   public final Map<ContainerId, ContainerLaunch> running = Collections.synchronizedMap(new HashMap<ContainerId, ContainerLaunch>());
     
@@ -111,6 +114,7 @@ public class ContainersLauncher extends AbstractService
           context.getApplications().get(
               containerId.getApplicationAttemptId().getApplicationId());
 
+        //创建一个容器运行对象,并且加入到全局属性中
         ContainerLaunch launch =
             new ContainerLaunch(context, getConfig(), dispatcher, exec, app,
               event.getContainer(), dirsHandler, containerManager);
@@ -120,6 +124,7 @@ public class ContainersLauncher extends AbstractService
       case RECOVER_CONTAINER:
         app = context.getApplications().get(
             containerId.getApplicationAttemptId().getApplicationId());
+        //创建一个容器运行对象,并且加入到全局属性中
         launch = new RecoveredContainerLaunch(context, getConfig(), dispatcher,
             exec, app, event.getContainer(), dirsHandler, containerManager);
         containerLauncher.submit(launch);

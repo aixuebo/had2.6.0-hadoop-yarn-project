@@ -39,6 +39,7 @@ public class ContainerExitStatus {
   /**
    * When threshold number of the nodemanager-local-directories or
    * threshold number of the nodemanager-log-directories become bad.
+   * 磁盘异常,导致没办法执行容器.因此退出
    */
   public static final int DISKS_FAILED = -101;
 

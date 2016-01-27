@@ -20,12 +20,14 @@ package org.apache.hadoop.yarn.server.nodemanager.api.protocolrecords;
 import java.util.List;
 
 /**
+ * 用于ContainerLocalizer本地下载容器对nodemanager发送心跳信息,报告该下载容器的一些信息,即每一个需要下载的资源是LocalResourceStatus对象
  * 主要保存两个信息
  * 1.localizerId
  * 2.LocalResourceStatus集合
  */
 public interface LocalizerStatus {
 
+  //下载容器ID.该ID由user或者app区分.即该下载容器是针对应用隔离的还是user隔离的
   String getLocalizerId();
   void setLocalizerId(String id);
 

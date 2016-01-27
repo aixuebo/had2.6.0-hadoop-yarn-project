@@ -45,6 +45,7 @@ import org.apache.hadoop.yarn.exceptions.YarnException;
  * <p>This is used by the <code>ApplicationMaster</code> to register/unregister
  * and to request and obtain resources in the cluster from the
  * <code>ResourceManager</code>.</p>
+ * 一个应用的主要服务,即ApplicationMaster需要做什么事情
  */
 @Public
 @Stable

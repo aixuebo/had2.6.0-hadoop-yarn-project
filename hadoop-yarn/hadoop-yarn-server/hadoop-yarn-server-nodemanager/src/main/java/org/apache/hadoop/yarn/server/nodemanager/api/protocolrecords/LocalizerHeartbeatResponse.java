@@ -20,8 +20,12 @@ package org.apache.hadoop.yarn.server.nodemanager.api.protocolrecords;
 import java.util.List;
 import org.apache.hadoop.yarn.server.nodemanager.api.*;
 
+/**
+ * 用于心跳回复任务状态的信息
+ */
 public interface LocalizerHeartbeatResponse {
 
+	//表示该任务下载器是否存活
   public LocalizerAction getLocalizerAction();
   public void setLocalizerAction(LocalizerAction action);
 

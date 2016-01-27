@@ -18,14 +18,17 @@
 
 package org.apache.hadoop.yarn.server.resourcemanager.scheduler.fair;
 
+//队列类型
 public enum FSQueueType {
   /*
    * Represents a leaf queue 
+   * 代表叶子队列
    */
   LEAF, 
   
   /*
    * Represents a parent queue
+   * 代表非叶子队列
    */
   PARENT
 }

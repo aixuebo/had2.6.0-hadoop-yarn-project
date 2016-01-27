@@ -78,6 +78,9 @@ import org.apache.hadoop.yarn.util.ConverterUtils;
 
 import com.google.common.annotations.VisibleForTesting;
 
+/**
+ * 运行一个容器的进程对象
+ */
 public class ContainerLaunch implements Callable<Integer> {
 
   private static final Log LOG = LogFactory.getLog(ContainerLaunch.class);
@@ -89,10 +92,11 @@ public class ContainerLaunch implements Callable<Integer> {
   private static final String PID_FILE_NAME_FMT = "%s.pid";
   private static final String EXIT_CODE_FILE_SUFFIX = ".exitcode";
 
+  
   protected final Dispatcher dispatcher;
   protected final ContainerExecutor exec;
-  private final Application app;
-  protected final Container container;
+  private final Application app;//该容器所对应的app应用对象
+  protected final Container container;//该容器对象
   private final Configuration conf;
   private final Context context;
   private final ContainerManagerImpl containerManager;
@@ -129,19 +133,28 @@ public class ContainerLaunch implements Callable<Integer> {
 
   /**
    * 格式化环境变量
+   * @param var 表示包含变量的命令
+   * @param containerLogDir 表示日志的目录,例如$logPath/$appid/$containerId
+   * 
+   * 改动3个地方
+   * 1.替换<LOG_DIR> 为日志输出目录$logPath/$appid/$containerId
+   * 2.替换<CPS>为;
+   * 3.linux系统中替换命令中包含{{的字符串改成$
+   * 4.linux系统中替换命令中包含}}的字符串改成""--空字符串
+   * 例如:path:<LOG_DIR>aa<CPS>bb{{ss}} 改成 path:$logPath/$appid/$containerIdaa;bb$ss
    */
   @VisibleForTesting
   public static String expandEnvironment(String var,Path containerLogDir) {
-    //替换<LOG_DIR>
+    //替换<LOG_DIR> 为日志输出目录
     var = var.replace(ApplicationConstants.LOG_DIR_EXPANSION_VAR,containerLogDir.toString());
-    //替换<CPS>
+    //替换<CPS>为;
     var =  var.replace(ApplicationConstants.CLASS_PATH_SEPARATOR,File.pathSeparator);
     // replace parameter expansion marker. e.g. {{VAR}} on Windows is replaced
     // as %VAR% and on Linux replaced as "$VAR"
     if (Shell.WINDOWS) {
       var = var.replaceAll("(\\{\\{)|(\\}\\})", "%");
     } else {
-      //替换{{为$
+      //linux系统中替换命令中包含{{的字符串改成$
       var = var.replace(ApplicationConstants.PARAMETER_EXPANSION_LEFT, "$");
       //替换}}为""
       var = var.replace(ApplicationConstants.PARAMETER_EXPANSION_RIGHT, "");
@@ -149,11 +162,14 @@ public class ContainerLaunch implements Callable<Integer> {
     return var;
   }
 
+  /**
+   * 真正线程池调用该方法开始启动容器
+   */
   @Override
   @SuppressWarnings("unchecked") // dispatcher not typed
   public Integer call() {
     final ContainerLaunchContext launchContext = container.getLaunchContext();
-    Map<Path,List<String>> localResources = null;
+    Map<Path,List<String>> localResources = null;//容器所需要的本地资源集合
     ContainerId containerID = container.getContainerId();
     String containerIdStr = ConverterUtils.toString(containerID);
     final List<String> command = launchContext.getCommands();
@@ -162,6 +178,7 @@ public class ContainerLaunch implements Callable<Integer> {
     // CONTAINER_KILLED_ON_REQUEST should not be missed if the container
     // is already at KILLING
     if (container.getContainerState() == ContainerState.KILLING) {
+    	//发送容器在请求阶段,还尚未真正执行阶段就被KILLING,即正在杀死该容器了,则发送容器失败事件
       dispatcher.getEventHandler().handle(
           new ContainerExitEvent(containerID,
               ContainerEventType.CONTAINER_KILLED_ON_REQUEST,
@@ -181,19 +198,26 @@ public class ContainerLaunch implements Callable<Integer> {
 
       final String user = container.getUser();
       // /////////////////////////// Variable expansion
-      // Before the container script gets written out.
+      // Before the container script gets written out.在容器的脚本不输出之前,要对脚本中的变量进行格式化替换
       List<String> newCmds = new ArrayList<String>(command.size());
       String appIdStr = app.getAppId().toString();
+      
+      //打印日志路径,该路径是相对路径,即$appid/$containerId
       String relativeContainerLogDir = ContainerLaunch
-          .getRelativeContainerLogDir(appIdStr, containerIdStr);
+          .getRelativeContainerLogDir(appIdStr, containerIdStr);//$appid/$containerId
+      
+      //获取绝对日志$logPath/$appid/$containerId
       Path containerLogDir =
           dirsHandler.getLogPathForWrite(relativeContainerLogDir, false);
+      
+      //对命令中变量进行格式化
       for (String str : command) {
         // TODO: Should we instead work via symlinks without this grammar?
         newCmds.add(expandEnvironment(str, containerLogDir));
       }
       launchContext.setCommands(newCmds);
 
+      //对环境中变量进行格式化
       Map<String, String> environment = launchContext.getEnvironment();
       // Make a copy of env to iterate & do variable expansion
       for (Entry<String, String> entry : environment.entrySet()) {
@@ -205,27 +229,30 @@ public class ContainerLaunch implements Callable<Integer> {
 
       FileContext lfs = FileContext.getLocalFSFileContext();
 
-      //nmPrivate/appIdStr/containerIdStr/launch_container.sh
+      //$localDir/nmPrivate/$appId/$containerId/launch_container.sh每一个容器的脚本文件路径
       Path nmPrivateContainerScriptPath =
           dirsHandler.getLocalPathForWrite(
               getContainerPrivateDir(appIdStr, containerIdStr) + Path.SEPARATOR
                   + CONTAINER_SCRIPT);
-      //nmPrivate/appIdStr/containerIdStr/containerIdStr.tokens
+      
+      //$localDir/nmPrivate/$appId/$containerId/containerIdStr.tokens,每一个容器的token文件存储路径
       Path nmPrivateTokensPath =
           dirsHandler.getLocalPathForWrite(
               getContainerPrivateDir(appIdStr, containerIdStr)
                   + Path.SEPARATOR
                   + String.format(ContainerLocalizer.TOKEN_FILE_NAME_FMT,
                       containerIdStr));
-      //nmPrivate/appIdStr/containerIdStr/
+      
+      //$localDir/nmPrivate/$appId/$containerId/
       Path nmPrivateClasspathJarDir = 
           dirsHandler.getLocalPathForWrite(
               getContainerPrivateDir(appIdStr, containerIdStr));
+      
       DataOutputStream containerScriptOutStream = null;
       DataOutputStream tokensOutStream = null;
 
       // Select the working directory for the container
-      //usercache/user/appcache/appIdStr/containerIdStr/
+      //$localDir/usercache/$user/appcache/$appId/$containerId/
       Path containerWorkDir =
           dirsHandler.getLocalPathForWrite(ContainerLocalizer.USERCACHE
               + Path.SEPARATOR + user + Path.SEPARATOR
@@ -233,21 +260,26 @@ public class ContainerLaunch implements Callable<Integer> {
               + Path.SEPARATOR + containerIdStr,
               LocalDirAllocator.SIZE_UNKNOWN, false);
 
-      //nmPrivate/appIdStr/containerIdStr/containerIdStr.pid
+      //$localDir/nmPrivate/$appId/$containerId/$containerId.pid,容器的进程号文件所在路径
       String pidFileSubpath = getPidFileSubpath(appIdStr, containerIdStr);
 
       // pid file should be in nm private dir so that it is not 
       // accessible by users
       pidFilePath = dirsHandler.getLocalPathForWrite(pidFileSubpath);
+      
       List<String> localDirs = dirsHandler.getLocalDirs();
       List<String> logDirs = dirsHandler.getLogDirs();
 
+      /**
+       * 存储该容器的日志输出目录
+       * $logDir/$appid/$containerId
+       */
       List<String> containerLogDirs = new ArrayList<String>();
       for( String logDir : logDirs) {
         containerLogDirs.add(logDir + Path.SEPARATOR + relativeContainerLogDir);
       }
 
-      if (!dirsHandler.areDisksHealthy()) {
+      if (!dirsHandler.areDisksHealthy()) {//磁盘异常,导致没办法执行容器.因此退出
         ret = ContainerExitStatus.DISKS_FAILED;
         throw new IOException("Most of the disks failed. "
             + dirsHandler.getDisksHealthReport(false));
@@ -273,11 +305,13 @@ public class ContainerLaunch implements Callable<Integer> {
               EnumSet.of(CREATE, OVERWRITE));
 
         // Set the token location too.
+        //设置HADOOP_TOKEN_FILE_LOCATION,对应的值是$localDir/usercache/$user/appcache/$appId/$containerId/container_tokens
         environment.put(
             ApplicationConstants.CONTAINER_TOKEN_FILE_ENV_NAME, 
             new Path(containerWorkDir, 
                 FINAL_CONTAINER_TOKENS_FILE).toUri().getPath());
-        // Sanitize the container's environment
+        
+        // Sanitize the container's environment 追加环境变量信息
         sanitizeEnv(environment, containerWorkDir, appDirs, containerLogDirs,
           localResources, nmPrivateClasspathJarDir);
         
@@ -355,6 +389,7 @@ public class ContainerLaunch implements Callable<Integer> {
       return ret;
     }
 
+    //发送容器成功完成事件
     LOG.info("Container " + containerIdStr + " succeeded ");
     dispatcher.getEventHandler().handle(
         new ContainerEvent(containerID,
@@ -365,7 +400,7 @@ public class ContainerLaunch implements Callable<Integer> {
   /**
    * @param appIdStr
    * @param containerIdStr
-   * @return nmPrivate/appIdStr/containerIdStr/containerIdStr.pid
+   * @return nmPrivate/$appId/$containerId/$containerId.pid
    */
   protected String getPidFileSubpath(String appIdStr, String containerIdStr) {
     return getContainerPrivateDir(appIdStr, containerIdStr) + Path.SEPARATOR
@@ -379,6 +414,7 @@ public class ContainerLaunch implements Callable<Integer> {
    * Also, sends a SIGTERM followed by a SIGKILL to the process if
    * the process id is available.
    * @throws IOException
+   * 清理该容器
    */
   @SuppressWarnings("unchecked") // dispatcher not typed
   public void cleanupContainer() throws IOException {
@@ -499,6 +535,7 @@ public class ContainerLaunch implements Callable<Integer> {
     return processId;
   }
 
+  //$appid/$containerId
   public static String getRelativeContainerLogDir(String appIdStr,String containerIdStr) {
     return appIdStr + Path.SEPARATOR + containerIdStr;
   }
@@ -507,7 +544,7 @@ public class ContainerLaunch implements Callable<Integer> {
    * 获取私有的容器目录
    * @param appIdStr
    * @param containerIdStr
-   * @return nmPrivate/appIdStr/containerIdStr/
+   * @return nmPrivate/$appId/$containerId/
    */
   private String getContainerPrivateDir(String appIdStr, String containerIdStr) {
     return getAppPrivateDir(appIdStr) + Path.SEPARATOR + containerIdStr
@@ -517,7 +554,7 @@ public class ContainerLaunch implements Callable<Integer> {
   /**
    * 获取私有的应用目录
    * @param appIdStr
-   * @return nmPrivate/appIdStr
+   * @return nmPrivate/$appId
    */
   private String getAppPrivateDir(String appIdStr) {
     return ResourceLocalizationService.NM_PRIVATE_DIR + Path.SEPARATOR + appIdStr;
@@ -534,13 +571,17 @@ public class ContainerLaunch implements Callable<Integer> {
     }
 
     private static final String LINE_SEPARATOR =
-        System.getProperty("line.separator");
+        System.getProperty("line.separator");//回车换行,即13 10两个字节
+    
     private final StringBuilder sb = new StringBuilder();
 
+    //处理命令信息
     public abstract void command(List<String> command) throws IOException;
 
+    //处理环境变量
     public abstract void env(String key, String value) throws IOException;
 
+    //生成软连接
     public final void symlink(Path src, Path dst) throws IOException {
       if (!src.isAbsolute()) {
         throw new IOException("Source must be absolute");
@@ -559,10 +600,12 @@ public class ContainerLaunch implements Callable<Integer> {
       return sb.toString();
     }
 
+    //将sb的内容写入到输出流中
     public final void write(PrintStream out) throws IOException {
       out.append(sb);
     }
 
+    //追加若干个命令,并且执行完后,添加回车换行
     protected final void line(String... command) {
       for (String s : command) {
         sb.append(s);
@@ -570,43 +613,58 @@ public class ContainerLaunch implements Callable<Integer> {
       sb.append(LINE_SEPARATOR);
     }
 
+    //生成软连接
     protected abstract void link(Path src, Path dst) throws IOException;
 
+    //创建目录
     protected abstract void mkdir(Path path) throws IOException;
   }
 
   private static final class UnixShellScriptBuilder extends ShellScriptBuilder {
 
+	  /**
+	   * 校验状态码是否非正常退出
+	   * 如果不是0,则要终止运行
+	   */
     private void errorCheck() {
-      line("hadoop_shell_errorcode=$?");
-      line("if [ $hadoop_shell_errorcode -ne 0 ]");
+      line("hadoop_shell_errorcode=$?");//hadoop_shell_errorcode变量存储 最后运行的命令的结束代码（返回值） 
+      line("if [ $hadoop_shell_errorcode -ne 0 ]");//如果状态码不是0,则非正常退出,则退出,并且写入状态码
       line("then");
       line("  exit $hadoop_shell_errorcode");
       line("fi");
     }
 
     public UnixShellScriptBuilder(){
-      line("#!/bin/bash");
-      line();
+      line("#!/bin/bash");//脚本写入字符串,并且换行
+      line();//换行
     }
 
+    //写入以下命令exec /bin/bash -c "command1 command2 command3",然后校验状态码是否非正常退出
     @Override
     public void command(List<String> command) {
       line("exec /bin/bash -c \"", StringUtils.join(" ", command), "\"");
       errorCheck();
     }
 
+    //导入环境变量,每次需要回车换行
+    //export key="value"
     @Override
     public void env(String key, String value) {
       line("export ", key, "=\"", value, "\"");
     }
 
+    /**
+     * ln -sf "src" "dst" 符号链接的目的是：在不改变原目录/文件的前提下，起一个方便的别名。相当于windows的快捷方式
+     */
     @Override
     protected void link(Path src, Path dst) throws IOException {
       line("ln -sf \"", src.toUri().getPath(), "\" \"", dst.toString(), "\"");
       errorCheck();
     }
 
+    /**
+     * mkdir -p path创建路径
+     */
     @Override
     protected void mkdir(Path path) {
       line("mkdir -p ", path.toString());
@@ -678,7 +736,8 @@ public class ContainerLaunch implements Callable<Integer> {
   }
 
   /**
-   * key不存在,就添加到环境变量中
+   * key不存在,并且value不是null,就添加到环境变量中
+   * 也就是说key不存在,并且System.getenv(key)不是null,就添加到环境变量中
    */
   private static void putEnvIfAbsent(Map<String, String> environment, String variable) {
     if (environment.get(variable) == null) {
@@ -695,6 +754,7 @@ public class ContainerLaunch implements Callable<Integer> {
    * @param resources
    * @param nmPrivateClasspathJarDir
    * @throws IOException
+   * 追加环境变量信息
    */
   public void sanitizeEnv(Map<String, String> environment, Path pwd,
       List<Path> appDirs, List<String> containerLogDirs,
@@ -741,7 +801,7 @@ public class ContainerLaunch implements Callable<Integer> {
         );
 
     if (!Shell.WINDOWS) {
-      environment.put("JVM_PID", "$$");
+      environment.put("JVM_PID", "$$");//Shell本身的PID
     }
 
     /**
@@ -749,13 +809,17 @@ public class ContainerLaunch implements Callable<Integer> {
      */
     
     // allow containers to override these variables
+    //添加NodeManager中环境变量key,用逗号拆分这些key
     String[] whitelist = conf.get(YarnConfiguration.NM_ENV_WHITELIST, YarnConfiguration.DEFAULT_NM_ENV_WHITELIST).split(",");
     
+    //也就是说key不存在,并且System.getenv(key)不是null,就添加到环境变量中,该值会覆盖用户自定义设置的值
     for(String whitelistEnvVariable : whitelist) {
       putEnvIfAbsent(environment, whitelistEnvVariable.trim());
     }
 
     // variables here will be forced in, even if the container has specified them.
+    //File.pathSeparator表示;  即使用;进行拆分
+    //添加自定义环境变量
     Apps.setEnvFromInputString(environment, conf.get(
       YarnConfiguration.NM_ADMIN_USER_ENV,
       YarnConfiguration.DEFAULT_NM_ADMIN_USER_ENV), File.pathSeparator);
@@ -824,7 +888,7 @@ public class ContainerLaunch implements Callable<Integer> {
         environment.put(Environment.CLASSPATH.name(), replacementClassPath);
       }
     }
-    // put AuxiliaryService data to environment
+    // put AuxiliaryService data to environment 为第三方服务接口添加环境变量
     for (Map.Entry<String, ByteBuffer> meta : containerManager
         .getAuxServiceMetaData().entrySet()) {
       AuxiliaryServiceHelper.setServiceDataIntoEnv(
@@ -833,7 +897,7 @@ public class ContainerLaunch implements Callable<Integer> {
   }
 
   /**
-   * @return pidFile.exitcode
+   * @return $pidFile.exitcode表示容器退出状态文件
    */
   public static String getExitCodeFile(String pidFile) {
     return pidFile + EXIT_CODE_FILE_SUFFIX;

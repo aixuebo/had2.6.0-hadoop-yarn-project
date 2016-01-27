@@ -23,7 +23,7 @@ package org.apache.hadoop.yarn.server.resourcemanager.rmapp.attempt;
  */
 public enum RMAppAttemptEventType {
   // Source: RMApp
-  START,
+  START,//创建RMAppAttempt实例,因为调度器已经接受了该app,所以该需要创建RMAppAttempt实例了
   KILL,
 
   // Source: AMLauncher
@@ -31,11 +31,11 @@ public enum RMAppAttemptEventType {
   LAUNCH_FAILED,
 
   // Source: AMLivelinessMonitor  AppAttempt长期没有向resourceManager发送心跳,则resourceManager认为其过期
-  EXPIRE,
+  EXPIRE,//通知ResourceManager这个应用已经过期了,即app的尝试任务ApplicationMaster长时间没有心跳反应了
   
   // Source: ApplicationMasterService
-  REGISTERED,
-  STATUS_UPDATE,
+  REGISTERED,//当AM注册到RM的时候,发送一个事件
+  STATUS_UPDATE,//更新AM的执行进度
   UNREGISTERED,
 
   // Source: Containers
@@ -47,7 +47,7 @@ public enum RMAppAttemptEventType {
   ATTEMPT_UPDATE_SAVED,
 
   // Source: Scheduler
-  ATTEMPT_ADDED,
+  ATTEMPT_ADDED,//当调度器接受了该尝试任务后产生该事件
   
   // Source: RMAttemptImpl.recover
   RECOVER

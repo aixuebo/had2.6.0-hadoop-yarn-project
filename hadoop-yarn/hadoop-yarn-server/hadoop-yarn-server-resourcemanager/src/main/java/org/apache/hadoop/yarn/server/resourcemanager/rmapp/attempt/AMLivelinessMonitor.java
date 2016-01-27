@@ -41,13 +41,14 @@ public class AMLivelinessMonitor extends AbstractLivelinessMonitor<ApplicationAt
   public void serviceInit(Configuration conf) throws Exception {
     super.serviceInit(conf);
     int expireIntvl = conf.getInt(YarnConfiguration.RM_AM_EXPIRY_INTERVAL_MS,
-            YarnConfiguration.DEFAULT_RM_AM_EXPIRY_INTERVAL_MS);
+            YarnConfiguration.DEFAULT_RM_AM_EXPIRY_INTERVAL_MS);//设置过期时间,超过该事件,则说明ApplicationMaster已经过期
     setExpireInterval(expireIntvl);
-    setMonitorInterval(expireIntvl/3);
+    setMonitorInterval(expireIntvl/3);//多少时间进行一次检查是否过期行为
   }
 
   /**
    * ApplicationAttemptId长期没有向resourceManager中发送心跳了
+   * 如果过期了,则会调用该方法
    */
   @Override
   protected void expire(ApplicationAttemptId id) {

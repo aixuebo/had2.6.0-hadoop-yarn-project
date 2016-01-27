@@ -20,9 +20,12 @@ package org.apache.hadoop.yarn.server.resourcemanager.scheduler.event;
 
 import org.apache.hadoop.yarn.server.resourcemanager.rmnode.RMNode;
 
+/**
+ * 通知调度器,一些节点的容器有变更.即远程节点有新容器被启动或者老容器被完成
+ */
 public class NodeUpdateSchedulerEvent extends SchedulerEvent {
 
-  private final RMNode rmNode;
+  private final RMNode rmNode;//说明哪个节点有容器变更
 
   public NodeUpdateSchedulerEvent(RMNode rmNode) {
     super(SchedulerEventType.NODE_UPDATE);

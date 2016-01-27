@@ -252,7 +252,7 @@ public abstract class ContainerExecutor implements Configurable {
    * 退出状态码
    */
   public enum ExitCode {
-    FORCE_KILLED(137),
+    FORCE_KILLED(137),//强制终止该容器而产生的状态码
     TERMINATED(143),//该容器已经终止,因为找不到pid文件
     LOST(154);
     private final int code;

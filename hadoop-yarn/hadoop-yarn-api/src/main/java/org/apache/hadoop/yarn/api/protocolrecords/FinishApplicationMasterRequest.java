@@ -40,6 +40,7 @@ import org.apache.hadoop.yarn.util.Records;
  * </p>
  *
  * @see ApplicationMasterProtocol#finishApplicationMaster(FinishApplicationMasterRequest)
+ * 表示当一个AM完成的时候调用该函数
  */
 @Public
 @Stable
@@ -51,9 +52,9 @@ public abstract class FinishApplicationMasterRequest {
       FinalApplicationStatus finalAppStatus, String diagnostics, String url) {
     FinishApplicationMasterRequest request =
         Records.newRecord(FinishApplicationMasterRequest.class);
-    request.setFinalApplicationStatus(finalAppStatus);
-    request.setDiagnostics(diagnostics);
-    request.setTrackingUrl(url);
+    request.setFinalApplicationStatus(finalAppStatus);//AM完成时候的状态
+    request.setDiagnostics(diagnostics);//AM完成时候的提示信息
+    request.setTrackingUrl(url);//AM最终的跟踪URL
     return request;
   }
 

@@ -127,7 +127,7 @@ public class ResourceManager extends CompositeService implements Recoverable {
   public static final int SHUTDOWN_HOOK_PRIORITY = 30;
 
   private static final Log LOG = LogFactory.getLog(ResourceManager.class);
-  private static long clusterTimeStamp = System.currentTimeMillis();
+  private static long clusterTimeStamp = System.currentTimeMillis();//集群ResourceManager启动的时间戳
 
   /**
    * "Always On" services. Services that need to run always irrespective of

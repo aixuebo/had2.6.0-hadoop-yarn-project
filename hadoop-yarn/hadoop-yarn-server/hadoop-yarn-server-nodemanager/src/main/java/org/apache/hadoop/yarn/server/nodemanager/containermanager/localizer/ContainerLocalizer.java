@@ -72,7 +72,7 @@ import org.apache.hadoop.yarn.util.FSDownload;
 import com.google.common.util.concurrent.ThreadFactoryBuilder;
 
 /**
- * 容器的本地化
+ * 容器的本地化,一个容器对应一个该对象
  */
 public class ContainerLocalizer {
 
@@ -89,8 +89,8 @@ public class ContainerLocalizer {
   public static final String OUTPUTDIR = "output";
   public static final String TOKEN_FILE_NAME_FMT = "%s.tokens";//$localizerId.tokens
   public static final String WORKDIR = "work";
-  private static final String APPCACHE_CTXT_FMT = "%s.app.cache.dirs";//appId.app.cache.dirs,存储内容:$x/usercache/$user/appcache/$appId/filecache 该应用的缓存空间
-  private static final String USERCACHE_CTXT_FMT = "%s.user.cache.dirs";//user.user.cache.dirs,存储内容:$x/usercache/$user/filecache 该用户的缓存空间
+  private static final String APPCACHE_CTXT_FMT = "%s.app.cache.dirs";//$appId.app.cache.dirs,存储内容:$x/usercache/$user/appcache/$appId/filecache 该应用的缓存空间
+  private static final String USERCACHE_CTXT_FMT = "%s.user.cache.dirs";//$user.user.cache.dirs,存储内容:$x/usercache/$user/filecache 该用户的缓存空间
   private static final FsPermission FILECACHE_PERMS = new FsPermission((short)0710);
 
   private final String user;//该容器是哪个应用的所属者
@@ -100,7 +100,7 @@ public class ContainerLocalizer {
   private final FileContext lfs;
   private final Configuration conf;
   private final RecordFactory recordFactory;
-  private final Map<LocalResource,Future<Path>> pendingResources;
+  private final Map<LocalResource,Future<Path>> pendingResources;//等待下载的资源
   private final String appCacheDirContextName;//appId.app.cache.dirs
 
   public ContainerLocalizer(FileContext lfs, String user, String appId,
@@ -137,7 +137,7 @@ public class ContainerLocalizer {
     final Credentials creds = new Credentials();
     DataInputStream credFile = null;
     try {
-      // assume credentials in cwd
+      // assume credentials in cwd 读取该user/app的token文件信息
       // TODO: Fix
       Path tokenPath = new Path(String.format(TOKEN_FILE_NAME_FMT, localizerId));
       credFile = lfs.open(tokenPath);
@@ -236,9 +236,9 @@ public class ContainerLocalizer {
     while (true) {
       try {
         LocalizerStatus status = createStatus();
-        LocalizerHeartbeatResponse response = nodemanager.heartbeat(status);
+        LocalizerHeartbeatResponse response = nodemanager.heartbeat(status);//向nodemanager发送心跳
         switch (response.getLocalizerAction()) {
-        case LIVE:
+        case LIVE://表示一个资源下载器是否存活
           List<ResourceLocalizationSpec> newRsrcs = response.getResourceSpecs();
           for (ResourceLocalizationSpec newRsrc : newRsrcs) {
             if (!pendingResources.containsKey(newRsrc.getResource())) {
@@ -248,7 +248,7 @@ public class ContainerLocalizer {
             }
           }
           break;
-        case DIE:
+        case DIE://表示一个资源下载器如果死了,则清理该请求资源
           // killall running localizations
           for (Future<Path> pending : pendingResources.values()) {
             pending.cancel(true);

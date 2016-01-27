@@ -96,6 +96,7 @@ public interface YarnScheduler extends EventHandler<SchedulerEvent> {
   /**
    * Get maximum allocatable {@link Resource}.
    * @return maximum allocatable resource
+   * 每一个资源申请的最大资源数,包含CPU和内存
    */
   @Public
   @Stable

@@ -21,6 +21,10 @@ import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.yarn.api.records.ContainerId;
 import org.apache.hadoop.yarn.server.nodemanager.containermanager.localizer.LocalResourceRequest;
 
+/**
+ * 对每一个容器发送该事件,表示资源已经下载完成
+ * 传入参数是资源下载到哪个路径下,以及下载的资源大小
+ */
 public class ContainerResourceLocalizedEvent extends ContainerResourceEvent {
 
   private final Path loc;//容器加载到本地资源的存储路径

@@ -61,15 +61,18 @@ import com.google.common.annotations.VisibleForTesting;
 
 /**
  * This class manages the list of applications for the resource manager. 
+ * 用于管理app集合
  */
 public class RMAppManager implements EventHandler<RMAppManagerEvent>, 
                                         Recoverable {
 
   private static final Log LOG = LogFactory.getLog(RMAppManager.class);
 
-  private int maxCompletedAppsInMemory;
-  private int maxCompletedAppsInStateStore;
-  protected int completedAppsInStateStore = 0;
+  private int maxCompletedAppsInMemory;//completedApps里面保存的app数量最多值
+  private int maxCompletedAppsInStateStore;//最多允许存储多少个完成的app状态
+  protected int completedAppsInStateStore = 0;//已经完成了多少个app,并且状态被存储了
+  
+  //存储已经完成的app集合,这些只是一部分数字,会随着时间变化,内容也会一直变化的
   private LinkedList<ApplicationId> completedApps = new LinkedList<ApplicationId>();
 
   private final RMContext rmContext;
@@ -107,9 +110,11 @@ public class RMAppManager implements EventHandler<RMAppManagerEvent>,
     // Escape sequences 
     static final char EQUALS = '=';
     static final char[] charsToEscape =
-      {StringUtils.COMMA, EQUALS, StringUtils.ESCAPE_CHAR};
+      {StringUtils.COMMA, EQUALS, StringUtils.ESCAPE_CHAR};//, = \\三个char字符串集合
 
     static class SummaryBuilder {
+    	
+    	//打印的结果是key=value,key=value这样的形式的字符串
       final StringBuilder buffer = new StringBuilder();
 
       // A little optimization for a very common case
@@ -155,6 +160,8 @@ public class RMAppManager implements EventHandler<RMAppManagerEvent>,
         trackingUrl = attempt.getTrackingUrl();
         host = attempt.getHost();
       }
+      
+      //打印该app的统计信息
       SummaryBuilder summary = new SummaryBuilder()
           .add("appId", app.getApplicationId())
           .add("name", app.getName())
@@ -173,6 +180,7 @@ public class RMAppManager implements EventHandler<RMAppManagerEvent>,
      * Log a summary of the application's runtime.
      * 
      * @param app {@link RMApp} whose summary is to be logged
+     * 将app的信息打印到日志中
      */
     public static void logAppSummary(RMApp app) {
       if (app != null) {
@@ -181,6 +189,7 @@ public class RMAppManager implements EventHandler<RMAppManagerEvent>,
     }
   }
 
+  //将app的信息打印到日志中
   @VisibleForTesting
   public void logApplicationSummary(ApplicationId appId) {
     ApplicationSummary.logAppSummary(rmContext.getRMApps().get(appId));
@@ -190,6 +199,7 @@ public class RMAppManager implements EventHandler<RMAppManagerEvent>,
     return this.completedApps.size(); 
   }
 
+  //完成app时候调用该方法
   protected synchronized void finishApplication(ApplicationId applicationId) {
     if (applicationId == null) {
       LOG.error("RMAppManager received completed appId of null, skipping");
@@ -205,6 +215,7 @@ public class RMAppManager implements EventHandler<RMAppManagerEvent>,
     }
   }
 
+  //打印日志
   protected void writeAuditLog(ApplicationId appId) {
     RMApp app = rmContext.getRMApps().get(appId);
     String operation = "UNKONWN";
@@ -237,10 +248,11 @@ public class RMAppManager implements EventHandler<RMAppManagerEvent>,
 
   /*
    * check to see if hit the limit for max # completed apps kept
+   * 删除完成的app在内存中的映射
    */
   protected synchronized void checkAppNumCompletedLimit() {
     // check apps kept in state store.
-    while (completedAppsInStateStore > this.maxCompletedAppsInStateStore) {
+    while (completedAppsInStateStore > this.maxCompletedAppsInStateStore) {//大于最大存储的时候进行处理
       ApplicationId removeId =
           completedApps.get(completedApps.size() - completedAppsInStateStore);
       RMApp removeApp = rmContext.getRMApps().get(removeId);
@@ -264,6 +276,12 @@ public class RMAppManager implements EventHandler<RMAppManagerEvent>,
     }
   }
 
+  /**
+   * 客户端提交了一个应用
+   * @param submissionContext 已经校验、格式化好的提交信息
+   * @param submitTime  应用在RM中调用该方法的时间
+   * @param user 提交应用的user
+   */
   @SuppressWarnings("unchecked")
   protected void submitApplication(
       ApplicationSubmissionContext submissionContext, long submitTime,
@@ -286,6 +304,7 @@ public class RMAppManager implements EventHandler<RMAppManagerEvent>,
         // RMApp is in NEW state and thus we haven't yet informed the
         // scheduler about the existence of the application
         assert application.getState() == RMAppState.NEW;
+        //app拒绝事件
         this.rmContext.getDispatcher().getEventHandler()
           .handle(new RMAppRejectedEvent(applicationId, e.getMessage()));
         throw RPCUtil.getRemoteException(e);
@@ -293,7 +312,7 @@ public class RMAppManager implements EventHandler<RMAppManagerEvent>,
     } else {
       // Dispatcher is not yet started at this time, so these START events
       // enqueued should be guaranteed to be first processed when dispatcher
-      // gets started.
+      // gets started.表示一个应用从客户端已经提交到了RM
       this.rmContext.getDispatcher().getEventHandler()
         .handle(new RMAppEvent(applicationId, RMAppEventType.START));
     }
@@ -312,11 +331,18 @@ public class RMAppManager implements EventHandler<RMAppManagerEvent>,
     application.handle(new RMAppRecoverEvent(appId, rmState));
   }
 
+  /**
+   * 创建一个app对象
+   * @param submissionContext 客户端提交上来的详细信息
+   * @param submitTime RM提交到该类的时间
+   * @param user 客户端提交该应用的用户
+   */
   private RMAppImpl createAndPopulateNewRMApp(
       ApplicationSubmissionContext submissionContext,
       long submitTime, String user)
       throws YarnException {
     ApplicationId applicationId = submissionContext.getApplicationId();
+    //创建并且校验ResourceRequest
     ResourceRequest amReq = validateAndCreateResourceRequest(submissionContext);
     // Create RMApp
     RMAppImpl application =
@@ -331,13 +357,13 @@ public class RMAppManager implements EventHandler<RMAppManagerEvent>,
     // Concurrent app submissions with different applicationIds will not
     // influence each other
     if (rmContext.getRMApps().putIfAbsent(applicationId, application) !=
-        null) {
+        null) {//不允许重复存储
       String message = "Application with id " + applicationId
           + " is already present! Cannot add a duplicate!";
       LOG.warn(message);
       throw RPCUtil.getRemoteException(message);
     }
-    // Inform the ACLs Manager
+    // Inform the ACLs Manager 添加该应用对应的权限
     this.applicationACLsManager.addApplication(applicationId,
         submissionContext.getAMContainerSpec().getApplicationACLs());
     String appViewACLs = submissionContext.getAMContainerSpec()
@@ -347,6 +373,9 @@ public class RMAppManager implements EventHandler<RMAppManagerEvent>,
     return application;
   }
 
+  /**
+   * @param submissionContext客户端提交上来的详细信息
+   */
   private ResourceRequest validateAndCreateResourceRequest(
       ApplicationSubmissionContext submissionContext)
       throws InvalidResourceRequestException {
@@ -360,7 +389,7 @@ public class RMAppManager implements EventHandler<RMAppManagerEvent>,
       ResourceRequest amReq;
       if (submissionContext.getAMContainerResourceRequest() != null) {
         amReq = submissionContext.getAMContainerResourceRequest();
-      } else {
+      } else {//如果没有设置AM的容器,则初始化该容器请求的资源
         amReq =
             BuilderUtils.newResourceRequest(
                 RMAppAttemptImpl.AM_CONTAINER_PRIORITY, ResourceRequest.ANY,
@@ -414,6 +443,11 @@ public class RMAppManager implements EventHandler<RMAppManagerEvent>,
     }
   }
 
+  /**
+   * 1.添加完成的app在内存的映射
+   * 2.将完成的app的详细日志,记录起来
+   * 3.检查如果完成的app超过限制,则清理内存空间
+   */
   @Override
   public void handle(RMAppManagerEvent event) {
     ApplicationId applicationId = event.getApplicationId();

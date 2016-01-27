@@ -36,6 +36,18 @@ import org.apache.hadoop.yarn.util.Records;
  * <p><code>ApplicationSubmissionContext</code> represents all of the
  * information needed by the <code>ResourceManager</code> to launch 
  * the <code>ApplicationMaster</code> for an application.</p>
+ * 该对象表示ResourceManager去为一个应用启动一个ApplicationMaster时候,需要的全部信息
+ * 
+ * 包含以下信息:
+ * 1.appId
+ * 2.app的提交者user
+ * 3.app的name名称
+ * 4.app执行的优先级
+ * 5.ContainerLaunchContext,ApplicationMaster中要去执行如何启动容器的上下文
+ * 6.maxAppAttempts,表示最多允许该app创建多少个尝试任务
+ *   该值不会大于yarn全局的最大值。
+ * 7.attemptFailuresValidityInterval
+ * 8.application-specific,例如LogAggregationContext
  * 
  * <p>It includes details such as:
  *   <ul>
@@ -49,7 +61,8 @@ import org.apache.hadoop.yarn.util.Records;
  *     </li>
  *     <li>maxAppAttempts. The maximum number of application attempts.
  *     It should be no larger than the global number of max attempts in the
- *     Yarn configuration.</li>
+ *     Yarn configuration.
+ *     </li>
  *     <li>attemptFailuresValidityInterval. The default value is -1.
  *     when attemptFailuresValidityInterval in milliseconds is set to > 0,
  *     the failure number will no take failures which happen out of the
@@ -291,6 +304,12 @@ public abstract class ApplicationSubmissionContext {
    * Such apps will not be retried by the RM on app attempt failure.
    * The default value is false.
    * @return true if the AM is not managed by the RM
+   * 
+   * 在YARN中，一个ApplicationMaster需要占用一个container，该container可能位于任意一个NodeManager上，
+   * 这给ApplicationMaster测试带来很大麻烦，为了解决该问题，YARN引入了一种新的ApplicationMaster—Unmanaged AM（具体参考：MAPREDUCE-4427），
+   * 这种AM运行在客户端，不再由ResourceManager启动和销毁。用户只需稍微修改一下客户端即可将分布式环境下的AM运行在客户端的一个单独进程中。
+   * 
+   * 即true表示RM不在管理AM了,AM在客户端的进程上运行
    */
   @Public
   @Stable
@@ -298,6 +317,7 @@ public abstract class ApplicationSubmissionContext {
   
   /**
    * @param value true if RM should not manage the AM
+   * true表示RM不在管理AM了,AM在客户端的进程上运行
    */
   @Public
   @Stable

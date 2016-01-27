@@ -25,9 +25,9 @@ import org.apache.hadoop.yarn.server.resourcemanager.rmapp.RMAppState;
 @Unstable
 public class SchedulerApplication<T extends SchedulerApplicationAttempt> {
 
-  private Queue queue;
-  private final String user;
-  private T currentAttempt;
+  private Queue queue;//该尝试任务对应的队列
+  private final String user;//该尝试任务对应的提交者
+  private T currentAttempt;//当前调度的app尝试任务
 
   public SchedulerApplication(Queue queue, String user) {
     this.queue = queue;

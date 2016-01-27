@@ -46,26 +46,31 @@ import org.apache.hadoop.yarn.util.resource.Resources;
 /**
  * This class keeps track of all the consumption of an application. This also
  * keeps track of current running/completed containers for the application.
+ * 表示一个应用的全局信息
  */
 @Private
 @Unstable
 public class AppSchedulingInfo {
   
   private static final Log LOG = LogFactory.getLog(AppSchedulingInfo.class);
-  private final ApplicationAttemptId applicationAttemptId;
-  final ApplicationId applicationId;
-  private String queueName;
-  Queue queue;
-  final String user;
+  private final ApplicationAttemptId applicationAttemptId;//应用的尝试ID
+  final ApplicationId applicationId;//应用ID
+  
+  private String queueName;//应用所属队列名字
+  Queue queue;//应用所属队列
+  final String user;//应用的提交者
+  
   // TODO making containerIdCounter long
-  private final AtomicLong containerIdCounter;
+  private final AtomicLong containerIdCounter;//该应用产生的容器自增长器
   private final int EPOCH_BIT_SHIFT = 40;
 
   //存储优先级集合
   final Set<Priority> priorities = new TreeSet<Priority>(new org.apache.hadoop.yarn.server.resourcemanager.resource.Priority.Comparator());
   //存储每一个优先级下的任务集合,value中的key是resourceName,即该任务应该在哪台节点执行,
   final Map<Priority, Map<String, ResourceRequest>> requests = new HashMap<Priority, Map<String, ResourceRequest>>();
-  //存储该任务的黑名单节点,通过心跳返回的
+  
+  
+  //存储该任务的黑名单节点,通过心跳返回的,字符串是SchedulerNode.nodeName
   private Set<String> blacklist = new HashSet<String>();
 
   //private final ApplicationStore store;
@@ -125,8 +130,9 @@ public class AppSchedulingInfo {
    * application, by asking for more resources and releasing resources acquired
    * by the application.
    *
-   * @param requests resources to be acquired
+   * @param requests resources to be acquired,ApplicationMaster需要的资源集合
    * @param recoverPreemptedRequest recover Resource Request on preemption
+   * ApplicationMaster要更新资源,即ApplicationMaster需要更多的资源
    */
   synchronized public void updateResourceRequests(List<ResourceRequest> requests, boolean recoverPreemptedRequest) {
     QueueMetrics metrics = queue.getMetrics();
@@ -215,12 +221,15 @@ public class AppSchedulingInfo {
     return priorities;
   }
 
+  /**
+   * 获取该优先级下所有资源
+   */
   synchronized public Map<String, ResourceRequest> getResourceRequests(Priority priority) {
     return requests.get(priority);
   }
 
   /**
-   * 获取所有的任务
+   * 获取所有的资源
    */
   synchronized public List<ResourceRequest> getAllResourceRequests() {
     List<ResourceRequest> ret = new ArrayList<ResourceRequest>();
@@ -246,6 +255,7 @@ public class AppSchedulingInfo {
 
   /**
    * 查看该资源是否是黑名单中
+   * @param resourceName是SchedulerNode.nodeName
    */
   public synchronized boolean isBlacklisted(String resourceName) {
     return blacklist.contains(resourceName);
@@ -307,14 +317,14 @@ public class AppSchedulingInfo {
       Priority priority, ResourceRequest nodeLocalRequest, Container container,
       List<ResourceRequest> resourceRequests) {
     // Update future requirements
-    nodeLocalRequest.setNumContainers(nodeLocalRequest.getNumContainers() - 1);
+    nodeLocalRequest.setNumContainers(nodeLocalRequest.getNumContainers() - 1);//减少一个容器,因为现在即将申请成功一个容器了
     if (nodeLocalRequest.getNumContainers() == 0) {
       this.requests.get(priority).remove(node.getNodeName());
     }
 
     ResourceRequest rackLocalRequest = requests.get(priority).get(
         node.getRackName());
-    rackLocalRequest.setNumContainers(rackLocalRequest.getNumContainers() - 1);
+    rackLocalRequest.setNumContainers(rackLocalRequest.getNumContainers() - 1);//减少一个容器,因为现在即将申请成功一个容器了
     if (rackLocalRequest.getNumContainers() == 0) {
       this.requests.get(priority).remove(node.getRackName());
     }

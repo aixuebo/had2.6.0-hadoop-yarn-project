@@ -21,6 +21,9 @@ package org.apache.hadoop.yarn.server.resourcemanager.rmapp;
 import org.apache.hadoop.yarn.api.records.ApplicationId;
 import org.apache.hadoop.yarn.api.records.NodeId;
 
+/**
+ * 说明该应用在某个节点上运行了.产生的事件
+ */
 public class RMAppRunningOnNodeEvent extends RMAppEvent {
   private final NodeId node;
 

@@ -44,7 +44,9 @@ public abstract class AbstractLivelinessMonitor<O> extends AbstractService {
   //received.
   private Thread checkerThread;//当前多线程
   private volatile boolean stopped;//是否他停止
+  
   public static final int DEFAULT_EXPIRE = 5*60*1000;//5 mins
+  
   private int expireInterval = DEFAULT_EXPIRE;//过期时间
   private int monitorInterval = expireInterval/3;//时间间隔
 

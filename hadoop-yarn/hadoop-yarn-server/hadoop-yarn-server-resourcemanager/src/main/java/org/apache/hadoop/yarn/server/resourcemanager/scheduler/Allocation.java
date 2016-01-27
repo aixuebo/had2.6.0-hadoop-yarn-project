@@ -32,7 +32,7 @@ import org.apache.hadoop.yarn.api.records.ResourceRequest;
  */
 public class Allocation {
   
-  final List<Container> containers;//容器,包含需要的资源以及执行的所在节点
+  final List<Container> containers;//从调度器中已经为该应用分配的容器,将这些容器发送给AM容器,这些容器里面包含了该到什么节点去运行这些容器等信息
   final Resource resourceLimit;//资源最大值
   final Set<ContainerId> strictContainers;//严格的容器
   final Set<ContainerId> fungibleContainers;//代替的容器

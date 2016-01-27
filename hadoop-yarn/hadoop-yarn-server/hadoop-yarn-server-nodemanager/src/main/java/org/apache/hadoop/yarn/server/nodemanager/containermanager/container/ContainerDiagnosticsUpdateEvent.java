@@ -20,6 +20,9 @@ package org.apache.hadoop.yarn.server.nodemanager.containermanager.container;
 
 import org.apache.hadoop.yarn.api.records.ContainerId;
 
+/**
+ * 更新容器状态事件,因此包含容器ID和容器的更新信息
+ */
 public class ContainerDiagnosticsUpdateEvent extends ContainerEvent {
 
   private final String diagnosticsUpdate;

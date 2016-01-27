@@ -28,7 +28,7 @@ import org.apache.hadoop.yarn.api.records.URL;
 import org.apache.hadoop.yarn.util.ConverterUtils;
 
 /**
- * 等待加载的资源信息,即请求的资源
+ * 本地加载资源信息的请求,构造函数是资源的原始请求对象
  */
 public class LocalResourceRequest
     extends LocalResource implements Comparable<LocalResourceRequest> {

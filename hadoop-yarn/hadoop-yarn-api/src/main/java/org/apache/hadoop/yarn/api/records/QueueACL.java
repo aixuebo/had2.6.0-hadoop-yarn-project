@@ -38,6 +38,7 @@ import org.apache.hadoop.yarn.api.ApplicationClientProtocol;
  * 
  * @see QueueInfo
  * @see ApplicationClientProtocol#getQueueUserAcls(org.apache.hadoop.yarn.api.protocolrecords.GetQueueUserAclsInfoRequest)
+ * 调度队列的权限,一个是提交权限,一个是管理权限
  */
 @Public
 @Stable

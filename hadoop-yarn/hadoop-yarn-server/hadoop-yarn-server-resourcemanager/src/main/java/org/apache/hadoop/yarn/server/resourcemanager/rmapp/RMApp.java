@@ -131,8 +131,8 @@ public interface RMApp extends EventHandler<RMAppEvent> {
    *   <li>resource usage report - all values are -1</li>
    * </ul>
    *
-   * @param clientUserName the user name of the client requesting the report
-   * @param allowAccess whether to allow full access to the report
+   * @param clientUserName the user name of the client requesting the report 调用者的user,即客户端哪个user调用了,想获取app的详细报告
+   * @param allowAccess whether to allow full access to the report ,表示是否有访问权限
    * @return the {@link ApplicationReport} detailing the status of the application.
    */
   ApplicationReport createAndGetApplicationReport(String clientUserName,
@@ -145,6 +145,9 @@ public interface RMApp extends EventHandler<RMAppEvent> {
    * each call to this method gives the delta from the previous call.
    * @param updatedNodes Collection into which the updates are transferred
    * @return the number of nodes added to the {@link Collection}
+   * 拉去Node节点变更的节点集合
+   * 将变更的节点集合添加到参数集合中
+   * 返回变更的节点数
    */
   int pullRMNodeUpdates(Collection<RMNode> updatedNodes);
 

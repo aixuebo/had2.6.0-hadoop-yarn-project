@@ -77,7 +77,7 @@ public class Apps {
    * 
    * @param env 环境变量Map集合
    * @param envString key=value1,key=value1 ,用逗号拆分多组key=value.每一组key=value中,value匹配正则表达式
-   * @param classPathSeparator 多个value之间的分隔符
+   * @param classPathSeparator 多个value之间的分隔符,一般情况下是;进行拆分
    * 设置环境变量
    */
   public static void setEnvFromInputString(Map<String, String> env,String envString,  String classPathSeparator) {

@@ -21,6 +21,9 @@ package org.apache.hadoop.yarn.server.resourcemanager.rmnode;
 import org.apache.hadoop.yarn.api.records.NodeId;
 import org.apache.hadoop.yarn.api.records.ResourceOption;
 
+/**
+ * 更新该NodeManager上节点的资源信息事件
+ */
 public class RMNodeResourceUpdateEvent extends RMNodeEvent {
 
   private final ResourceOption resourceOption;

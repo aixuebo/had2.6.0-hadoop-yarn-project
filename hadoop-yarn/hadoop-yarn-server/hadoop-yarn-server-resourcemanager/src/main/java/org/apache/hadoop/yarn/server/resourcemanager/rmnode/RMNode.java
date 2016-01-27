@@ -37,7 +37,7 @@ import org.apache.hadoop.yarn.server.api.protocolrecords.NodeHeartbeatResponse;
  */
 public interface RMNode {
 
-  /** negative value means no timeout */
+  /** negative value means no timeout 负值意味着不需要超时*/
   public static final int OVER_COMMIT_TIMEOUT_MILLIS_DEFAULT = -1;
   
   /**
@@ -96,7 +96,7 @@ public interface RMNode {
   public String getNodeManagerVersion();
 
   /**
-   * the total available resource.
+   * the total available resource. 总的可用资源
    * @return the total available resource.
    */
   public Resource getTotalCapability();

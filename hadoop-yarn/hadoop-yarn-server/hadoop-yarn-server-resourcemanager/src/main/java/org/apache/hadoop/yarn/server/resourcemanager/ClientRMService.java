@@ -152,6 +152,7 @@ import com.google.common.util.concurrent.SettableFuture;
 /**
  * The client interface to the Resource Manager. This module handles all the rpc
  * interfaces to the resource manager from the client.
+ * 客户端与ResourceManager之间的协议 ,提交、终止、查询应用信息以及集群信息
  */
 public class ClientRMService extends AbstractService implements
     ApplicationClientProtocol {
@@ -159,16 +160,17 @@ public class ClientRMService extends AbstractService implements
 
   private static final Log LOG = LogFactory.getLog(ClientRMService.class);
 
-  final private AtomicInteger applicationCounter = new AtomicInteger(0);
+  final private AtomicInteger applicationCounter = new AtomicInteger(0);//appId自增长器
   final private YarnScheduler scheduler;
   final private RMContext rmContext;
   private final RMAppManager rmAppManager;
 
-  private Server server;
+  private Server server;//实现ApplicationClientProtocol协议,这个是服务器端,为协议提供服务
+  InetSocketAddress clientBindAddress;//提供服务的IP:port
+  
   protected RMDelegationTokenSecretManager rmDTSecretManager;
 
   private final RecordFactory recordFactory = RecordFactoryProvider.getRecordFactory(null);
-  InetSocketAddress clientBindAddress;
 
   private final ApplicationACLsManager applicationsACLsManager;
   private final QueueACLsManager queueACLsManager;
@@ -208,10 +210,14 @@ public class ClientRMService extends AbstractService implements
     super.serviceInit(conf);
   }
 
+  /**
+   * 启动该ApplicationClientProtocol服务
+   */
   @Override
   protected void serviceStart() throws Exception {
     Configuration conf = getConfig();
     YarnRPC rpc = YarnRPC.create(conf);
+    //实现ApplicationClientProtocol协议,这个是服务器端,为协议提供服务
     this.server =   
       rpc.getServer(ApplicationClientProtocol.class, this,
             clientBindAddress,
@@ -249,6 +255,7 @@ public class ClientRMService extends AbstractService implements
     super.serviceStop();
   }
 
+  //获取ApplicationClientProtocol协议提供服务的服务器端IP:port
   InetSocketAddress getBindAddress(Configuration conf) {
     return conf.getSocketAddr(
             YarnConfiguration.RM_BIND_HOST,
@@ -279,6 +286,7 @@ public class ClientRMService extends AbstractService implements
             application.getQueue());
   }
 
+  //分配新的一个appId
   ApplicationId getNewApplicationId() {
     ApplicationId applicationId = org.apache.hadoop.yarn.server.utils.BuilderUtils
         .newApplicationId(recordFactory, ResourceManager.getClusterTimeStamp(),
@@ -294,9 +302,7 @@ public class ClientRMService extends AbstractService implements
         .newRecordInstance(GetNewApplicationResponse.class);
     response.setApplicationId(getNewApplicationId());
     // Pick up min/max resource from scheduler...
-    response.setMaximumResourceCapability(scheduler
-        .getMaximumResourceCapability());       
-    
+    response.setMaximumResourceCapability(scheduler.getMaximumResourceCapability());
     return response;
   }
   
@@ -544,6 +550,7 @@ public class ClientRMService extends AbstractService implements
       throw RPCUtil.getRemoteException(ie);
     }
 
+    //对提交的应用的信息进行格式化与校验
     // Check whether app has already been put into rmContext,
     // If it is, simply return the response
     if (rmContext.getRMApps().get(applicationId) != null) {
@@ -551,7 +558,7 @@ public class ClientRMService extends AbstractService implements
       return SubmitApplicationResponse.newInstance();
     }
 
-    if (submissionContext.getQueue() == null) {
+    if (submissionContext.getQueue() == null) {//如果没有设置队列,则分配默认队列
       submissionContext.setQueue(YarnConfiguration.DEFAULT_QUEUE_NAME);
     }
     if (submissionContext.getApplicationName() == null) {
@@ -562,7 +569,7 @@ public class ClientRMService extends AbstractService implements
       submissionContext
         .setApplicationType(YarnConfiguration.DEFAULT_APPLICATION_TYPE);
     } else {
-      if (submissionContext.getApplicationType().length() > YarnConfiguration.APPLICATION_TYPE_LENGTH) {
+      if (submissionContext.getApplicationType().length() > YarnConfiguration.APPLICATION_TYPE_LENGTH) {//截取应用类型的前20个字符
         submissionContext.setApplicationType(submissionContext
           .getApplicationType().substring(0,
             YarnConfiguration.APPLICATION_TYPE_LENGTH));
@@ -574,6 +581,7 @@ public class ClientRMService extends AbstractService implements
       rmAppManager.submitApplication(submissionContext,
           System.currentTimeMillis(), user);
 
+      //打印日志,user提交了一个应用
       LOG.info("Application with id " + applicationId.getId() + 
           " submitted by user " + user);
       RMAuditLogger.logSuccess(user, AuditConstants.SUBMIT_APP_REQUEST,
@@ -637,6 +645,7 @@ public class ClientRMService extends AbstractService implements
       return KillApplicationResponse.newInstance(true);
     }
 
+    //发送app的kill事件
     this.rmContext.getDispatcher().getEventHandler()
         .handle(new RMAppEvent(applicationId, RMAppEventType.KILL));
 
@@ -667,6 +676,8 @@ public class ClientRMService extends AbstractService implements
    * Get applications matching the {@link GetApplicationsRequest}. If
    * caseSensitive is set to false, applicationTypes in
    * GetApplicationRequest are expected to be in all-lowercase
+   * 
+   * @param caseSensitive true表示大小写敏感,false表示不敏感,大小写都无所谓
    */
   @Private
   public GetApplicationsResponse getApplications(
@@ -692,10 +703,10 @@ public class ClientRMService extends AbstractService implements
     ApplicationsRequestScope scope = request.getScope();
 
     final Map<ApplicationId, RMApp> apps = rmContext.getRMApps();
-    Iterator<RMApp> appsIter;
+    Iterator<RMApp> appsIter;//迭代所有队列中存在的app集合
     // If the query filters by queues, we can avoid considering apps outside
     // of those queues by asking the scheduler for the apps in those queues.
-    if (queues != null && !queues.isEmpty()) {
+    if (queues != null && !queues.isEmpty()) {//根据队列过滤一些app
       // Construct an iterator over apps in given queues
       // Collect list of lists to avoid copying all apps
       final List<List<ApplicationAttemptId>> queueAppLists =
@@ -707,8 +718,9 @@ public class ClientRMService extends AbstractService implements
         }
       }
       appsIter = new Iterator<RMApp>() {
-        Iterator<List<ApplicationAttemptId>> appListIter = queueAppLists.iterator();
-        Iterator<ApplicationAttemptId> schedAppsIter;
+    	  //一个List一个List迭代,然后迭代每一个List的数据
+        Iterator<List<ApplicationAttemptId>> appListIter = queueAppLists.iterator();//一个List,一个List迭代
+        Iterator<ApplicationAttemptId> schedAppsIter;//迭代同一个List
 
         @Override
         public boolean hasNext() {
@@ -729,29 +741,31 @@ public class ClientRMService extends AbstractService implements
           throw new UnsupportedOperationException("Remove not supported");
         }
       };
-    } else {
+    } else {//迭代全部app
       appsIter = apps.values().iterator();
     }
     
     List<ApplicationReport> reports = new ArrayList<ApplicationReport>();
-    while (appsIter.hasNext() && reports.size() < limit) {
+    while (appsIter.hasNext() && reports.size() < limit) {//一个app一个app循环处理,直到获取请求的上限为止
       RMApp application = appsIter.next();
 
       // Check if current application falls under the specified scope
       boolean allowAccess = checkAccess(callerUGI, application.getUser(),
           ApplicationAccessType.VIEW_APP, application);
+      
+      //校验通过app的权限过滤,是否允许要查看该app权限
       if (scope == ApplicationsRequestScope.OWN &&
-          !callerUGI.getUserName().equals(application.getUser())) {
+          !callerUGI.getUserName().equals(application.getUser())) {//必须是user本人的app才可以看
         continue;
-      } else if (scope == ApplicationsRequestScope.VIEWABLE && !allowAccess) {
+      } else if (scope == ApplicationsRequestScope.VIEWABLE && !allowAccess) {//必须是user本人有权限看的app才允许看
         continue;
       }
 
       if (applicationTypes != null && !applicationTypes.isEmpty()) {
         String appTypeToMatch = caseSensitive
             ? application.getApplicationType()
-            : application.getApplicationType().toLowerCase();
-        if (!applicationTypes.contains(appTypeToMatch)) {
+            : application.getApplicationType().toLowerCase();//根据大小写是否敏感,获取app的Type字符串
+        if (!applicationTypes.contains(appTypeToMatch)) {//如果该app的Type不包含在请求的需求中,则过滤掉
           continue;
         }
       }
@@ -793,6 +807,7 @@ public class ClientRMService extends AbstractService implements
         }
       }
 
+      //程序到这里了,说明这些app是满足查询条件的,因此获取他的详细数据,添加到集合中
       reports.add(application.createAndGetApplicationReport(
           callerUGI.getUserName(), allowAccess));
     }
@@ -852,7 +867,7 @@ public class ClientRMService extends AbstractService implements
     return response;
   }
 
-  private NodeReport createNodeReports(RMNode rmNode) {    
+  private NodeReport createNodeReports(RMNode rmNode) {
     SchedulerNodeReport schedulerNodeReport = 
         scheduler.getNodeReport(rmNode.getNodeID());
     Resource used = BuilderUtils.newResource(0, 0);

@@ -21,13 +21,13 @@ package org.apache.hadoop.yarn.server.resourcemanager.scheduler.event;
 public enum SchedulerEventType {
 
   // Source: Node
-  NODE_ADDED,
-  NODE_REMOVED,
-  NODE_UPDATE,//节点通过心跳,发送该节点的容器信息,更新该节点将要启动的容器以及完成的容器
-  NODE_RESOURCE_UPDATE,//更新该节点的资源信息,重新计算该节点的资源
+  NODE_ADDED,//向资源调度器触发一个事件,一个节点被添加到调度器中
+  NODE_REMOVED,//当某一个节点不健康了,则从调度器移除该节点
+  NODE_UPDATE,//节点通过心跳,发送该节点的容器信息,更新该节点将要启动的容器以及完成的容器,通知调度器,一些节点的容器有变更.即远程节点有新容器被启动或者老容器被完成
+  NODE_RESOURCE_UPDATE,//更新一个节点的资源信息,重新计算该节点的资源
 
   // Source: RMApp
-  APP_ADDED,
+  APP_ADDED,//一个app提交到调度器中
   APP_REMOVED,
 
   // Source: RMAppAttempt

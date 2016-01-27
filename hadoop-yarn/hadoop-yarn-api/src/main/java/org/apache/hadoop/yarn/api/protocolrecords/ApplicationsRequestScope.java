@@ -27,12 +27,12 @@ import org.apache.hadoop.classification.InterfaceStability;
 @InterfaceAudience.Public
 @InterfaceStability.Unstable
 public enum ApplicationsRequestScope {
-  /** All jobs */
+  /** All jobs 可以查看所有的job*/
   ALL,
 
-  /** Jobs viewable by current user */
+  /** Jobs viewable by current user 只能查看该user可以有VIEW_APP权限的job*/
   VIEWABLE,
 
-  /** Jobs owned by current user */
+  /** Jobs owned by current user 仅能查看user自己的job*/
   OWN
 }

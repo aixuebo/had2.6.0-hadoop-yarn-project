@@ -165,7 +165,7 @@ public class RMAppAttemptImpl implements RMAppAttempt, Recoverable {
   // re-created if this attempt is eventually failed because of preemption,
   // hardware error or NM resync. So this flag indicates that this may be
   // last attempt.
-  private final boolean maybeLastAttempt;
+  private final boolean maybeLastAttempt;//true表示该实例是app的最后一个尝试实例,因为尝试实例已经达到了极限
   private static final ExpiredTransition EXPIRED_TRANSITION =
       new ExpiredTransition();
 
@@ -422,6 +422,17 @@ public class RMAppAttemptImpl implements RMAppAttempt, Recoverable {
           new ContainerFinishedAtFinalStateTransition())
     .installTopology();
 
+  /**
+   * 创建一个RMAppAttempt实例
+   * @param appAttemptId
+   * @param rmContext
+   * @param scheduler
+   * @param masterService
+   * @param submissionContext
+   * @param conf
+   * @param maybeLastAttempt true表示该实例是app的最后一个尝试实例,因为尝试实例已经达到了极限
+   * @param amReq
+   */
   public RMAppAttemptImpl(ApplicationAttemptId appAttemptId,
       RMContext rmContext, YarnScheduler scheduler,
       ApplicationMasterService masterService,

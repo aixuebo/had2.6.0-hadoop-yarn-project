@@ -18,6 +18,9 @@
 
 package org.apache.hadoop.yarn.server.nodemanager.containermanager.launcher;
 
+/**
+ * 容器对应的三个事件类型
+ */
 public enum ContainersLauncherEventType {
   LAUNCH_CONTAINER,
   RECOVER_CONTAINER,

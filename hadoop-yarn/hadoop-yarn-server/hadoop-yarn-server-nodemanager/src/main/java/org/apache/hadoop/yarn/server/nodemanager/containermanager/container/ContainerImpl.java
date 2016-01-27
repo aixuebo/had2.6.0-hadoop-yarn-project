@@ -90,6 +90,7 @@ public class ContainerImpl implements Container {
   private final Resource resource;
   private final String user;
   private int exitCode = ContainerExitStatus.INVALID;
+  //存储容器更新的信息,里面包含\r\n回车换行
   private final StringBuilder diagnostics;
   private boolean wasLaunched;
 
@@ -106,10 +107,13 @@ public class ContainerImpl implements Container {
    */
   private final Map<Path,List<String>> localizedResources = new HashMap<Path,List<String>>();
     
+  //public可见级别的资源下载请求队列
   private final List<LocalResourceRequest> publicRsrcs = new ArrayList<LocalResourceRequest>();
-    
+
+  //user可见级别的资源下载请求队列
   private final List<LocalResourceRequest> privateRsrcs = new ArrayList<LocalResourceRequest>();
     
+  //app可见级别的资源下载请求队列
   private final List<LocalResourceRequest> appRsrcs = new ArrayList<LocalResourceRequest>();
     
 
@@ -552,6 +556,7 @@ public class ContainerImpl implements Container {
               vmemBytes, pmemBytes));
   }
 
+  //添加容器更新的信息
   private void addDiagnostics(String... diags) {
     for (String s : diags) {
       this.diagnostics.append(s);
@@ -604,7 +609,7 @@ public class ContainerImpl implements Container {
    * 
    * If there are any invalid resources specified, enters LOCALIZATION_FAILED
    * directly.
-   * 初始化,即容器的第一步
+   * 初始化,即容器的第一步,发送LocalizationEventType.INIT_CONTAINER_RESOURCES事件,去下载资源
    */
   @SuppressWarnings("unchecked") // dispatcher not typed
   static class RequestResourcesTransition implements
@@ -704,7 +709,7 @@ public class ContainerImpl implements Container {
   /**
    * Transition when one of the requested resources for this container
    * has been successfully localized.
-   * 请求的资源加载
+   * 请求的资源有一个被加载
    */
   static class LocalizedTransition implements MultipleArcTransition<ContainerImpl,ContainerEvent,ContainerState> {
     @Override
@@ -983,6 +988,7 @@ public class ContainerImpl implements Container {
   static class ContainerDiagnosticsUpdateTransition implements SingleArcTransition<ContainerImpl, ContainerEvent> {
     @Override
     public void transition(ContainerImpl container, ContainerEvent event) {
+      //更新容器状态事件,因此包含容器ID和容器的更新信息
       ContainerDiagnosticsUpdateEvent updateEvent = (ContainerDiagnosticsUpdateEvent) event;
       container.addDiagnostics(updateEvent.getDiagnosticsUpdate(), "\n");
       try {

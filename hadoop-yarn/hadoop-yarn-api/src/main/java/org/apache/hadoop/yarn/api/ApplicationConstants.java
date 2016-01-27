@@ -23,6 +23,7 @@ import org.apache.hadoop.classification.InterfaceStability.Evolving;
 import org.apache.hadoop.classification.InterfaceStability.Unstable;
 import org.apache.hadoop.security.UserGroupInformation;
 import org.apache.hadoop.util.Shell;
+import org.apache.hadoop.yarn.conf.YarnConfiguration;
 
 /**
  * This is the API for the applications comprising of constants that YARN sets
@@ -57,6 +58,7 @@ public interface ApplicationConstants {
   /**
    * The temporary environmental variable for container log directory. This
    * should be replaced by real container log directory on container launch.
+   * 替换命令中包含<LOG_DIR>的字符串,改成 日志输出目录$logPath/$appid/$containerId
    */
   public static final String LOG_DIR_EXPANSION_VAR = "<LOG_DIR>";
 
@@ -66,6 +68,7 @@ public interface ApplicationConstants {
    * NodeManager on container launch. User has to use this constant to construct
    * class path if user wants cross-platform practice i.e. submit an application
    * from a Windows client to a Linux/Unix server or vice versa.
+   * 替换命令中包含<CPS>的字符串改成;  即路径path分隔符
    */
   @Public
   @Unstable
@@ -79,6 +82,7 @@ public interface ApplicationConstants {
    * constant to construct class path if user wants cross-platform practice i.e.
    * submit an application from a Windows client to a Linux/Unix server or vice
    * versa.
+   * linux系统中替换命令中包含{{的字符串改成$
    */
   @Public
   @Unstable
@@ -88,6 +92,7 @@ public interface ApplicationConstants {
    * User has to use this constant to construct class path if user wants
    * cross-platform practice i.e. submit an application from a Windows client to
    * a Linux/Unix server or vice versa.
+   * linux系统中替换命令中包含{{的字符串改成"",即空字符串
    */
   @Public
   @Unstable
@@ -108,23 +113,31 @@ public interface ApplicationConstants {
    * 
    * Some of the environment variables for applications are <em>final</em> 
    * i.e. they cannot be modified by the applications.
+   * 容器执行命令时候的环境变量
    */
   public enum Environment {
     /**
      * $USER
      * Final, non-modifiable.
+     * 存储的值是container.getUser()
      */
     USER("USER"),
     
     /**
      * $LOGNAME
      * Final, non-modifiable.
+     * 存储的值是container.getUser()
      */
     LOGNAME("LOGNAME"),
     
     /**
      * $HOME
      * Final, non-modifiable.
+     * 存储的值是:
+     *         conf.get(
+            YarnConfiguration.NM_USER_HOME_DIR, 
+            YarnConfiguration.DEFAULT_NM_USER_HOME_DIR
+            )
      */
     HOME("HOME"),
     
@@ -193,30 +206,35 @@ public interface ApplicationConstants {
     /**
      * $CONTAINER_ID
      * Final, exported by NodeManager and non-modifiable by users.
+     * 存储的值是container.getContainerId(),即容器ID
      */
     CONTAINER_ID("CONTAINER_ID"),
 
     /**
      * $NM_HOST
      * Final, exported by NodeManager and non-modifiable by users.
+     * 存储的值是context.getNodeId().getHost()
      */
     NM_HOST("NM_HOST"),
 
     /**
      * $NM_HTTP_PORT
      * Final, exported by NodeManager and non-modifiable by users.
+     * 存储的值是context.getHttpPort()
      */
     NM_HTTP_PORT("NM_HTTP_PORT"),
 
     /**
      * $NM_PORT
      * Final, exported by NodeManager and non-modifiable by users.
+     * 存储的值是context.getNodeId().getPort()
      */
     NM_PORT("NM_PORT"),
 
     /**
      * $LOCAL_DIRS
      * Final, exported by NodeManager and non-modifiable by users.
+     * 存储的值是localDir/usercache/user/appcache/appIdStr集合,用于存储数据
      */
     LOCAL_DIRS("LOCAL_DIRS"),
 
@@ -225,6 +243,7 @@ public interface ApplicationConstants {
      * Final, exported by NodeManager and non-modifiable by users.
      * Comma separate list of directories that the container should use for
      * logging.
+     * 存储的值是$logDir/$appid/$containerId,用于存储日志
      */
     LOG_DIRS("LOG_DIRS");
 

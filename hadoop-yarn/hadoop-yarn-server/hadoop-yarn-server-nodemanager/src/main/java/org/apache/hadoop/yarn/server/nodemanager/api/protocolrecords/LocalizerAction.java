@@ -17,6 +17,9 @@
 */
 package org.apache.hadoop.yarn.server.nodemanager.api.protocolrecords;
 
+/**
+ * 表示一个资源下载器是否存活
+ */
 public enum LocalizerAction {
   LIVE, DIE
 }

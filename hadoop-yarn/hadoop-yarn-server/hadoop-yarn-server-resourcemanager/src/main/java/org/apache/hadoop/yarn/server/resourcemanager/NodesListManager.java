@@ -48,12 +48,14 @@ public class NodesListManager extends AbstractService implements EventHandler<No
 
   private HostsFileReader hostsReader;//设置哪些节点可用，哪些节点不可用
   private Configuration conf;
+  
+  //不可用节点集合
   private Set<RMNode> unusableRMNodesConcurrentSet = Collections.newSetFromMap(new ConcurrentHashMap<RMNode,Boolean>());
   
   private final RMContext rmContext;
 
-  private String includesFile;
-  private String excludesFile;
+  private String includesFile;//文件路径,存储这可以使用的节点集合
+  private String excludesFile;//文件路径,存储这不可以使用的节点集合
 
   public NodesListManager(RMContext rmContext) {
     super(NodesListManager.class.getName());
@@ -67,8 +69,9 @@ public class NodesListManager extends AbstractService implements EventHandler<No
 
     // Read the hosts/exclude files to restrict access to the RM
     try {
+      //文件路径,存储这可以使用的节点集合
       this.includesFile = conf.get(YarnConfiguration.RM_NODES_INCLUDE_FILE_PATH,YarnConfiguration.DEFAULT_RM_NODES_INCLUDE_FILE_PATH);
-          
+      //文件路径,存储这不可以使用的节点集合
       this.excludesFile = conf.get(YarnConfiguration.RM_NODES_EXCLUDE_FILE_PATH,
           YarnConfiguration.DEFAULT_RM_NODES_EXCLUDE_FILE_PATH);
       this.hostsReader = createHostsFileReader(this.includesFile, this.excludesFile);
@@ -159,7 +162,7 @@ public class NodesListManager extends AbstractService implements EventHandler<No
   public void handle(NodesListManagerEvent event) {
     RMNode eventNode = event.getNode();
     switch (event.getType()) {
-    case NODE_UNUSABLE:
+    case NODE_UNUSABLE://节点不可用
       LOG.debug(eventNode + " reported unusable");
       unusableRMNodesConcurrentSet.add(eventNode);
       for(RMApp app: rmContext.getRMApps().values()) {
@@ -171,8 +174,8 @@ public class NodesListManager extends AbstractService implements EventHandler<No
                     RMAppNodeUpdateType.NODE_UNUSABLE));
       }
       break;
-    case NODE_USABLE:
-      if (unusableRMNodesConcurrentSet.contains(eventNode)) {
+    case NODE_USABLE://节点可用
+      if (unusableRMNodesConcurrentSet.contains(eventNode)) {//从不可用节点集合中移除该节点
         LOG.debug(eventNode + " reported usable");
         unusableRMNodesConcurrentSet.remove(eventNode);
       }

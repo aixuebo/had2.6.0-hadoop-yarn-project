@@ -21,11 +21,14 @@ package org.apache.hadoop.yarn.server.resourcemanager.scheduler.event;
 import org.apache.hadoop.yarn.api.records.ApplicationId;
 import org.apache.hadoop.yarn.api.records.ReservationId;
 
+/**
+ * 一个app提交到调度器中
+ */
 public class AppAddedSchedulerEvent extends SchedulerEvent {
 
-  private final ApplicationId applicationId;
-  private final String queue;
-  private final String user;
+  private final ApplicationId applicationId;//appId
+  private final String queue;//该app所属队列
+  private final String user;//该app所属user
   private final ReservationId reservationID;
   private final boolean isAppRecovering;
 

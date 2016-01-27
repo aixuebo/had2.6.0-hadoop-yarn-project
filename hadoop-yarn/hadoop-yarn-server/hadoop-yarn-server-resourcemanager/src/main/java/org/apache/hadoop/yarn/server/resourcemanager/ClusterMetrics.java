@@ -38,7 +38,7 @@ public class ClusterMetrics {
   
   private static AtomicBoolean isInitialized = new AtomicBoolean(false);
   
-  @Metric("# of active NMs") MutableGaugeInt numActiveNMs;
+  @Metric("# of active NMs") MutableGaugeInt numActiveNMs;//活跃的NodeManager节点数量
   @Metric("# of decommissioned NMs") MutableGaugeInt numDecommissionedNMs;
   @Metric("# of lost NMs") MutableGaugeInt numLostNMs;
   @Metric("# of unhealthy NMs") MutableGaugeInt numUnhealthyNMs;

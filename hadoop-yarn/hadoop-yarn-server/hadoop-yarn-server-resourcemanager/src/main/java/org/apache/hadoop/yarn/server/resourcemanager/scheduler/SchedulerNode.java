@@ -41,6 +41,7 @@ import org.apache.hadoop.yarn.util.resource.Resources;
 
 /**
  * Represents a YARN Cluster Node from the viewpoint of the scheduler.
+ * 从调度器的视角上看,这个类代表YARN的集群上一个Node节点
  */
 @Private
 @Unstable
@@ -48,24 +49,27 @@ public abstract class SchedulerNode {
 
   private static final Log LOG = LogFactory.getLog(SchedulerNode.class);
 
-  private Resource availableResource = Resource.newInstance(0, 0);
-  private Resource usedResource = Resource.newInstance(0, 0);
-  private Resource totalResourceCapability;
+  private Resource availableResource = Resource.newInstance(0, 0);//可用资源
+  private Resource usedResource = Resource.newInstance(0, 0);//已经使用的资源
+  private Resource totalResourceCapability;//总的资源
+  
   private RMContainer reservedContainer;//预留容器
-  private volatile int numContainers;//该节点正在运行的容器
+  private volatile int numContainers;//该节点上正在运行的容器
 
 
-  /* set of containers that are allocated containers */
+  /* set of containers that are allocated containers 在该节点上运行的容器映射集合*/
   private final Map<ContainerId, RMContainer> launchedContainers =
       new HashMap<ContainerId, RMContainer>();
 
-  private final RMNode rmNode;
-  private final String nodeName;
+  private final RMNode rmNode;//该NodeManager在ResourceManager上的映射对象
+  private final String nodeName;//该节点的名字
 
   public SchedulerNode(RMNode node, boolean usePortForNodeName) {
     this.rmNode = node;
     this.availableResource = Resources.clone(node.getTotalCapability());
     this.totalResourceCapability = Resources.clone(node.getTotalCapability());
+    
+    //该节点的名字是否带有端口号
     if (usePortForNodeName) {
       nodeName = rmNode.getHostName() + ":" + node.getNodeID().getPort();
     } else {
@@ -80,6 +84,7 @@ public abstract class SchedulerNode {
   /**
    * Set total resources on the node.
    * @param resource total resources on the node.
+   * 设置总资源以及可用资源
    */
   public synchronized void setTotalResource(Resource resource){
     this.totalResourceCapability = resource;
@@ -130,7 +135,7 @@ public abstract class SchedulerNode {
    * 
    * @param rmContainer
    *          allocated container
-   *分配内存中在该节点上启动一个容器         
+   * 分配内存中在该节点上启动一个容器
    */
   public synchronized void allocateContainer(RMContainer rmContainer) {
     Container container = rmContainer.getContainer();
@@ -197,17 +202,17 @@ public abstract class SchedulerNode {
    * 
    * @param container
    *          container to be released
-   *          释放一个容器
+   * 释放一个容器
    */
   public synchronized void releaseContainer(Container container) {
-    if (!isValidContainer(container.getId())) {
+    if (!isValidContainer(container.getId())) {//false说明容器本来也不在该节点上运行,因此直接return即可
       LOG.error("Invalid container released " + container);
       return;
     }
 
-    /* remove the containers from the nodemanger */
+    /* remove the containers from the nodemanger 删除该容器*/
     if (null != launchedContainers.remove(container.getId())) {
-      updateResource(container);
+      updateResource(container);//释放该容器资源
     }
 
     LOG.info("Released container " + container.getId() + " of capacity "
@@ -239,7 +244,10 @@ public abstract class SchedulerNode {
           + rmNode.getNodeAddress());
       return;
     }
+    
+    //可用资源减去该资源
     Resources.subtractFrom(availableResource, resource);
+    //已经使用的资源加上该资源
     Resources.addTo(usedResource, resource);
   }
 
@@ -271,14 +279,17 @@ public abstract class SchedulerNode {
     return numContainers;
   }
 
+  //获取该节点上正在被调度运行的容器集合
   public synchronized List<RMContainer> getRunningContainers() {
     return new ArrayList<RMContainer>(launchedContainers.values());
   }
 
+  //获取已经储备的容器
   public synchronized RMContainer getReservedContainer() {
     return reservedContainer;
   }
 
+  //设置要储备的容器
   protected synchronized void
       setReservedContainer(RMContainer reservedContainer) {
     this.reservedContainer = reservedContainer;

@@ -51,14 +51,14 @@ public abstract class NodeHealthStatus {
   public static NodeHealthStatus newInstance(boolean isNodeHealthy,
       String healthReport, long lastHealthReport) {
     NodeHealthStatus status = Records.newRecord(NodeHealthStatus.class);
-    status.setIsNodeHealthy(isNodeHealthy);//是否健康
+    status.setIsNodeHealthy(isNodeHealthy);//远程节点是否健康,true表示健康
     status.setHealthReport(healthReport);//不健康的话,输出什么信息
-    status.setLastHealthReportTime(lastHealthReport);//最后一次检查健康时间
+    status.setLastHealthReportTime(lastHealthReport);//更新远程节点最后一次健康检查时间
     return status;
   }
 
   /**
-   * Is the node healthy?
+   * Is the node healthy?远程节点是否健康,true表示健康
    * @return <code>true</code> if the node is healthy, else <code>false</code>
    */
   @Public

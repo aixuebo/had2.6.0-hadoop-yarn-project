@@ -29,9 +29,9 @@ import org.apache.hadoop.yarn.api.records.Resource;
 @Private
 @Stable
 public class SchedulerNodeReport {
-  private final Resource used;
-  private final Resource avail;
-  private final int num;
+  private final Resource used;//该节点已经使用资源
+  private final Resource avail;//该节点尚可使用资源
+  private final int num;//该节点存在多少个容器
   
   public SchedulerNodeReport(SchedulerNode node) {
     this.used = node.getUsedResource();

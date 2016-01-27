@@ -22,6 +22,9 @@ import org.apache.hadoop.yarn.event.AbstractEvent;
 import org.apache.hadoop.yarn.event.Event;
 import org.apache.hadoop.yarn.server.nodemanager.containermanager.container.Container;
 
+/**
+ * 一个容器对应一个启动事件
+ */
 public class ContainersLauncherEvent
     extends AbstractEvent<ContainersLauncherEventType>{
 

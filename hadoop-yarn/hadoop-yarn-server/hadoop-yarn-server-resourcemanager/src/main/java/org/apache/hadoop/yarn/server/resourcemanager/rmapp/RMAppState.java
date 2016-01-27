@@ -25,9 +25,9 @@ package org.apache.hadoop.yarn.server.resourcemanager.rmapp;
  */
 public enum RMAppState {
   NEW,
-  NEW_SAVING,
-  SUBMITTED,
-  ACCEPTED,
+  NEW_SAVING,//说明app正在向RMStateStore里面写入日志中
+  SUBMITTED,//说明app已经提交到调度器中了
+  ACCEPTED,//说明调度器已经接受了该app了
   RUNNING,
   FINAL_SAVING,
   FINISHING,

@@ -155,10 +155,14 @@ public class YarnConfiguration extends Configuration {
   public static final String DEFAULT_RM_SCHEDULER_ADDRESS = "0.0.0.0:" +
     DEFAULT_RM_SCHEDULER_PORT;
 
-  /** Miniumum request grant-able by the RM scheduler. */
+  /** Miniumum request grant-able by the RM scheduler. 
+   *  表示一个NodeManager节点最小要提供的内存总资源也不能小于此值
+   **/
   public static final String RM_SCHEDULER_MINIMUM_ALLOCATION_MB =
     YARN_PREFIX + "scheduler.minimum-allocation-mb";
   public static final int DEFAULT_RM_SCHEDULER_MINIMUM_ALLOCATION_MB = 1024;
+  
+  //表示一个NodeManager节点最小要提供的CPU总资源也不能小于此值
   public static final String RM_SCHEDULER_MINIMUM_ALLOCATION_VCORES =
       YARN_PREFIX + "scheduler.minimum-allocation-vcores";
     public static final int DEFAULT_RM_SCHEDULER_MINIMUM_ALLOCATION_VCORES = 1;
@@ -240,7 +244,9 @@ public class YarnConfiguration extends Configuration {
   public static final String DEFAULT_RM_RESOURCE_TRACKER_ADDRESS =
     "0.0.0.0:" + DEFAULT_RM_RESOURCE_TRACKER_PORT;
 
-  /** The expiry interval for application master reporting.*/
+  /** The expiry interval for application master reporting.
+   * 设置过期时间,超过该事件,则说明ApplicationMaster已经过期
+   **/
   public static final String RM_AM_EXPIRY_INTERVAL_MS = 
     YARN_PREFIX  + "am.liveness-monitor.expiry-interval-ms";
   public static final int DEFAULT_RM_AM_EXPIRY_INTERVAL_MS = 600000;
@@ -311,12 +317,16 @@ public class YarnConfiguration extends Configuration {
     RM_PREFIX + "rm.container-allocation.expiry-interval-ms";
   public static final int DEFAULT_RM_CONTAINER_ALLOC_EXPIRY_INTERVAL_MS = 600000;
   
-  /** Path to file with nodes to include.*/
+  /** Path to file with nodes to include.
+   * 文件路径,存储这可以使用的节点集合
+   **/
   public static final String RM_NODES_INCLUDE_FILE_PATH = 
     RM_PREFIX + "nodes.include-path";
   public static final String DEFAULT_RM_NODES_INCLUDE_FILE_PATH = "";
   
-  /** Path to file with nodes to exclude.*/
+  /** Path to file with nodes to exclude.
+   *  文件路径,存储这不可以使用的节点集合
+   **/
   public static final String RM_NODES_EXCLUDE_FILE_PATH = 
     RM_PREFIX + "nodes.exclude-path";
   public static final String DEFAULT_RM_NODES_EXCLUDE_FILE_PATH = "";
@@ -524,10 +534,10 @@ public class YarnConfiguration extends Configuration {
   /** Default application name */
   public static final String DEFAULT_APPLICATION_NAME = "N/A";
 
-  /** Default application type */
+  /** Default application type 默认应用的类型属于Yarn类型应用*/
   public static final String DEFAULT_APPLICATION_TYPE = "YARN";
 
-  /** Default application type length */
+  /** Default application type length 应用类型的最大长度*/
   public static final int APPLICATION_TYPE_LENGTH = 20;
   
   /** Default queue name */
@@ -563,6 +573,7 @@ public class YarnConfiguration extends Configuration {
   public static final long DEFAULT_RM_NMTOKEN_MASTER_KEY_ROLLING_INTERVAL_SECS =
       24 * 60 * 60;
 
+  //表示一个NodeManager节点最小要提供的版本号
   public static final String RM_NODEMANAGER_MINIMUM_VERSION =
       RM_PREFIX + "nodemanager.minimum.version";
 
@@ -581,11 +592,15 @@ public class YarnConfiguration extends Configuration {
   /** Prefix for all node manager configs.*/
   public static final String NM_PREFIX = "yarn.nodemanager.";
 
-  /** Environment variables that will be sent to containers.*/
+  /** Environment variables that will be sent to containers.
+   * 添加自定义环境变量
+   **/
   public static final String NM_ADMIN_USER_ENV = NM_PREFIX + "admin-env";
   public static final String DEFAULT_NM_ADMIN_USER_ENV = "MALLOC_ARENA_MAX=$MALLOC_ARENA_MAX";
 
-  /** Environment variables that containers may override rather than use NodeManager's default.*/
+  /** Environment variables that containers may override rather than use NodeManager's default.
+   * 添加NodeManager中环境变量key,用逗号拆分这些key,该值会覆盖用户自定义设置的值 
+   **/
   public static final String NM_ENV_WHITELIST = NM_PREFIX + "env-whitelist";
   public static final String DEFAULT_NM_ENV_WHITELIST = StringUtils.join(",",
     Arrays.asList(ApplicationConstants.Environment.JAVA_HOME.key(),

@@ -22,11 +22,11 @@ public enum RMContainerEventType {
 
   // Source: SchedulerApp
   START,
-  ACQUIRED,
+  ACQUIRED,//容器已经准备发送给对应的AM了
   KILL, // Also from Node on NodeRemoval
   RESERVED,
 
-  LAUNCHED,
+  LAUNCHED,//说明该容器已经在节点上启动了
   FINISHED,
 
   // Source: ApplicationMasterService->Scheduler

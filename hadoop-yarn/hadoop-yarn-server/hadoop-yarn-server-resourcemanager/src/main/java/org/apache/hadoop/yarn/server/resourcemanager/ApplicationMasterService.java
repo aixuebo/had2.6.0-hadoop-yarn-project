@@ -98,15 +98,20 @@ import org.apache.hadoop.yarn.server.utils.BuilderUtils;
 
 import com.google.common.annotations.VisibleForTesting;
 
+/**
+ * 表示一个应用的主要服务
+ */
 @SuppressWarnings("unchecked")
 @Private
 public class ApplicationMasterService extends AbstractService implements
     ApplicationMasterProtocol {
   private static final Log LOG = LogFactory.getLog(ApplicationMasterService.class);
-  private final AMLivelinessMonitor amLivelinessMonitor;
+  private final AMLivelinessMonitor amLivelinessMonitor;//监控该ApplicationMaster长时间没有收到ResourceManager的心跳了,则说明其过期失效了
   private YarnScheduler rScheduler;
-  private InetSocketAddress bindAddress;
-  private Server server;
+  
+  private InetSocketAddress bindAddress;//ApplicationMasterProtocol对应的服务器端对外提供的ip:port
+  private Server server;//ApplicationMasterProtocol对应的服务器端,即就是本类
+  
   private final RecordFactory recordFactory =
       RecordFactoryProvider.getRecordFactory(null);
   private final ConcurrentMap<ApplicationAttemptId, AllocateResponseLock> responseMap =
@@ -125,6 +130,7 @@ public class ApplicationMasterService extends AbstractService implements
     Configuration conf = getConfig();
     YarnRPC rpc = YarnRPC.create(conf);
 
+    //该ApplicationMasterProtocol服务提供的ip和端口
     InetSocketAddress masterServiceAddress = conf.getSocketAddr(
         YarnConfiguration.RM_BIND_HOST,
         YarnConfiguration.RM_SCHEDULER_ADDRESS,
@@ -137,6 +143,7 @@ public class ApplicationMasterService extends AbstractService implements
     serverConf.set(
         CommonConfigurationKeysPublic.HADOOP_SECURITY_AUTHENTICATION,
         SaslRpcServer.AuthMethod.TOKEN.toString());
+    
     this.server =
       rpc.getServer(ApplicationMasterProtocol.class, this, masterServiceAddress,
           serverConf, this.rmContext.getAMRMTokenSecretManager(),
@@ -228,6 +235,9 @@ public class ApplicationMasterService extends AbstractService implements
     return appTokenIdentifier;
   }
 
+  /**
+   * 即一个ApplicationMaster实现类  要注册到 RM上的请求
+   */
   @Override
   public RegisterApplicationMasterResponse registerApplicationMaster(RegisterApplicationMasterRequest request) throws YarnException,IOException {
 
@@ -245,10 +255,10 @@ public class ApplicationMasterService extends AbstractService implements
       throwApplicationDoesNotExistInCacheException(applicationAttemptId);
     }
 
-    // Allow only one thread in AM to do registerApp at a time.
+    // Allow only one thread in AM to do registerApp at a time.在处理AM注册阶段时候,仅仅允许一个线程处理
     synchronized (lock) {
       AllocateResponse lastResponse = lock.getAllocateResponse();
-      if (hasApplicationMasterRegistered(applicationAttemptId)) {
+      if (hasApplicationMasterRegistered(applicationAttemptId)) {//true说明该应用已经注册了
         String message =
             "Application Master is already registered : "
                 + appID;
@@ -275,6 +285,8 @@ public class ApplicationMasterService extends AbstractService implements
         .handle(
           new RMAppAttemptRegistrationEvent(applicationAttemptId, request
             .getHost(), request.getRpcPort(), request.getTrackingUrl()));
+      
+      //注册成功
       RMAuditLogger.logSuccess(app.getUser(), AuditConstants.REGISTER_AM,
         "ApplicationMasterService", appID, applicationAttemptId);
 
@@ -330,6 +342,9 @@ public class ApplicationMasterService extends AbstractService implements
     }
   }
 
+  /**
+   * 表示当一个AM完成的时候调用该函数
+   */
   @Override
   public FinishApplicationMasterResponse finishApplicationMaster(
       FinishApplicationMasterRequest request) throws YarnException,
@@ -383,6 +398,7 @@ public class ApplicationMasterService extends AbstractService implements
     }
   }
 
+  //在缓存中app不存在
   private void throwApplicationDoesNotExistInCacheException(
       ApplicationAttemptId appAttemptId)
       throws InvalidApplicationMasterRequestException {
@@ -395,6 +411,7 @@ public class ApplicationMasterService extends AbstractService implements
   /**
    * @param appAttemptId
    * @return true if application is registered for the respective attemptid
+   * true说明该应用已经注册了
    */
   public boolean hasApplicationMasterRegistered(
       ApplicationAttemptId appAttemptId) {
@@ -433,7 +450,7 @@ public class ApplicationMasterService extends AbstractService implements
     }
     synchronized (lock) {
       AllocateResponse lastResponse = lock.getAllocateResponse();
-      if (!hasApplicationMasterRegistered(appAttemptId)) {
+      if (!hasApplicationMasterRegistered(appAttemptId)) {//该应用没有AM注册,因此抛异常
         String message =
             "AM is not registered for known application attempt: " + appAttemptId
                 + " or RM had restarted after AM registered . AM should re-register.";
@@ -456,7 +473,7 @@ public class ApplicationMasterService extends AbstractService implements
         throw new InvalidApplicationMasterRequestException(message);
       }
 
-      //filter illegal progress values
+      //filter illegal progress values 设置进度
       float filteredProgress = request.getProgress();
       if (Float.isNaN(filteredProgress) || filteredProgress == Float.NEGATIVE_INFINITY
         || filteredProgress < 0) {
@@ -465,19 +482,24 @@ public class ApplicationMasterService extends AbstractService implements
         request.setProgress(1);
       }
 
-      // Send the status update to the appAttempt.
+      // Send the status update to the appAttempt.更新AM的进度
       this.rmContext.getDispatcher().getEventHandler().handle(
           new RMAppAttemptStatusupdateEvent(appAttemptId, request
               .getProgress()));
 
-      List<ResourceRequest> ask = request.getAskList();
-      List<ContainerId> release = request.getReleaseList();
+      List<ResourceRequest> ask = request.getAskList();//AM那边要请求的资源
+      List<ContainerId> release = request.getReleaseList();//AM那边已经完成的容器,因此要释放掉
 
+      //AM那边收到的黑名单,包含新增加的黑名单以及要移除的黑名单
       ResourceBlacklistRequest blacklistRequest =
           request.getResourceBlacklistRequest();
+      
+      //要添加的黑名单
       List<String> blacklistAdditions =
           (blacklistRequest != null) ?
               blacklistRequest.getBlacklistAdditions() : Collections.EMPTY_LIST;
+
+      //要移除的黑名单
       List<String> blacklistRemovals =
           (blacklistRequest != null) ?
               blacklistRequest.getBlacklistRemovals() : Collections.EMPTY_LIST;
@@ -492,7 +514,7 @@ public class ApplicationMasterService extends AbstractService implements
         }
       }
               
-      // sanity check
+      // sanity check 聪明的校验,对资源进行校验
       try {
         RMServerUtils.validateResourceRequests(ask,
             rScheduler.getMaximumResourceCapability(), app.getQueue(),
@@ -539,8 +561,9 @@ public class ApplicationMasterService extends AbstractService implements
       }
 
       // update the response with the deltas of node status changes
+      //用于存储变更节点集合
       List<RMNode> updatedNodes = new ArrayList<RMNode>();
-      if(app.pullRMNodeUpdates(updatedNodes) > 0) {
+      if(app.pullRMNodeUpdates(updatedNodes) > 0) {//返回变更的节点数
         List<NodeReport> updatedNodeReports = new ArrayList<NodeReport>();
         for(RMNode rmNode: updatedNodes) {
           SchedulerNodeReport schedulerNodeReport = rScheduler.getNodeReport(rmNode.getNodeID());

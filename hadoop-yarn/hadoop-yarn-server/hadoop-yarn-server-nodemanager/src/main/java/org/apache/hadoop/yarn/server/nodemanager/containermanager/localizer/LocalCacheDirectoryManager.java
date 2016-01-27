@@ -133,6 +133,7 @@ public class LocalCacheDirectoryManager {
    * 
    * @param path the directory within a cache directory
    * @return the local cache directory root or null if not found
+   * 获取跟目录
    */
   public static Path getCacheDirectoryRoot(Path path) {
     while (path != null) {
@@ -174,7 +175,7 @@ public class LocalCacheDirectoryManager {
     static String getRelativePath(int directoryNo) {
       String relativePath = "";
       if (directoryNo > 0) {
-        String tPath = Integer.toString(directoryNo - 1, DIRECTORIES_PER_LEVEL);
+        String tPath = Integer.toString(directoryNo - 1, DIRECTORIES_PER_LEVEL);//directoryNo=34,返回值是2,如果是41,则返回13
         StringBuffer sb = new StringBuffer();
         if (tPath.length() == 1) {
           sb.append(tPath.charAt(0));

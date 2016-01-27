@@ -22,9 +22,15 @@ import java.util.List;
 
 import org.apache.hadoop.yarn.api.records.ContainerStatus;
 
+/**
+ * 更新容器的集合信息
+ * 当节点状态更新的时候,
+ * 1.会收到以前节点没有收到过的容器,即新容器
+ * 2.会计算到远程节点已经完成的容器,即完成容器
+ */
 public class UpdatedContainerInfo {
-  private List<ContainerStatus> newlyLaunchedContainers;
-  private List<ContainerStatus> completedContainers;
+  private List<ContainerStatus> newlyLaunchedContainers;//会收到以前节点没有收到过的容器,即新容器
+  private List<ContainerStatus> completedContainers;//会计算到远程节点已经完成的容器,即完成容器
   
   public UpdatedContainerInfo() {
   }

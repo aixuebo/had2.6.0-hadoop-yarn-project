@@ -24,10 +24,13 @@ import org.apache.hadoop.yarn.api.records.ApplicationId;
 import org.apache.hadoop.yarn.api.records.NodeId;
 import org.apache.hadoop.yarn.server.api.protocolrecords.NMContainerStatus;
 
+/**
+ * 由new状态改成Runing状态,表示该节点在调度器中开始被调度了 
+ */
 public class RMNodeStartedEvent extends RMNodeEvent {
 
-  private List<NMContainerStatus> containerStatuses;
-  private List<ApplicationId> runningApplications;
+  private List<NMContainerStatus> containerStatuses;//该节点上运行的容器集合
+  private List<ApplicationId> runningApplications;//该节点上运行的应用集合
 
   public RMNodeStartedEvent(NodeId nodeId,
       List<NMContainerStatus> containerReports,

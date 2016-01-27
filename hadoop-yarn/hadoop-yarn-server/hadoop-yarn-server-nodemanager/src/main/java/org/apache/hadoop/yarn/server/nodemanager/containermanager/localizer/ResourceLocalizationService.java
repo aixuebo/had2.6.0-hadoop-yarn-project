@@ -1163,7 +1163,7 @@ public class ResourceLocalizationService extends CompositeService
     public void run() {
       Path nmPrivateCTokensPath = null;
       try {
-        // Get nmPrivateDir 路径:nmPrivate/localizerId.tokens
+        // Get nmPrivateDir 路径:nmPrivate/$localizerId.tokens
         nmPrivateCTokensPath =
           dirsHandler.getLocalPathForWrite(
                 NM_PRIVATE_DIR + Path.SEPARATOR
@@ -1173,7 +1173,7 @@ public class ResourceLocalizationService extends CompositeService
         // 0) init queue, etc.
         // 1) write credentials to private dir 向nmPrivate/localizerId.tokens文件写入creden信息
         writeCredentials(nmPrivateCTokensPath);
-        // 2) exec initApplication and wait
+        // 2) exec initApplication and wait 调用容器,开启下载该容器所需要的资源,传入localizationServerAddress是下载进程与NodeManager通信,然后通过LocalizationProtocol.heartbeat进行交互
         if (dirsHandler.areDisksHealthy()) {
           exec.startLocalizer(nmPrivateCTokensPath, localizationServerAddress,
               context.getUser(),
@@ -1197,10 +1197,14 @@ public class ResourceLocalizationService extends CompositeService
         for (LocalizerResourceRequestEvent event : scheduled.values()) {
           event.getResource().unlock();
         }
+        //运行完后删除token文件
         delService.delete(null, nmPrivateCTokensPath, new Path[] {});
       }
     }
 
+    /**
+     * 找到该appId对应的Credentials对象
+     */
     private Credentials getSystemCredentialsSentFromRM(
         LocalizerContext localizerContext) throws IOException {
       ApplicationId appId =
@@ -1219,14 +1223,14 @@ public class ResourceLocalizationService extends CompositeService
     }
     
     /**
-     * 写入credien信息
+     * 写入credien信息到nmPrivateCTokensPath文件下
      */
     private void writeCredentials(Path nmPrivateCTokensPath)
         throws IOException {
       DataOutputStream tokenOut = null;
       try {
         Credentials credentials = context.getCredentials();
-        if (UserGroupInformation.isSecurityEnabled()) {
+        if (UserGroupInformation.isSecurityEnabled()) {//找到该appId对应的Credentials对象
           Credentials systemCredentials = getSystemCredentialsSentFromRM(context);
           if (systemCredentials != null) {
             credentials = systemCredentials;

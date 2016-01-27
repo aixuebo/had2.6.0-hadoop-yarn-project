@@ -23,17 +23,26 @@ import java.util.List;
 import org.apache.hadoop.yarn.server.api.protocolrecords.NMContainerStatus;
 import org.apache.hadoop.yarn.server.resourcemanager.rmnode.RMNode;
 
+/**
+ * 向资源调度器触发一个事件,一个节点被添加到调度器中
+ * 1.该节点可能以前是不健康的状态，转变成健康状态,则要调用该事件
+ * 2.NodeManager第一次被注册到资源管理器后产生的事件,添加该节点运行的容器集合
+ */
 public class NodeAddedSchedulerEvent extends SchedulerEvent {
 
-  private final RMNode rmNode;
+  private final RMNode rmNode;//等待添加的节点
   private final List<NMContainerStatus> containerReports;
 
+  /**
+   * 该构造函数是:该节点可能以前是不健康的状态，转变成健康状态,则要调用该事件
+   */
   public NodeAddedSchedulerEvent(RMNode rmNode) {
     super(SchedulerEventType.NODE_ADDED);
     this.rmNode = rmNode;
     this.containerReports = null;
   }
 
+  //NodeManager第一次被注册到资源管理器后产生的事件,添加该节点运行的容器集合
   public NodeAddedSchedulerEvent(RMNode rmNode,
       List<NMContainerStatus> containerReports) {
     super(SchedulerEventType.NODE_ADDED);

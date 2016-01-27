@@ -60,6 +60,7 @@ import org.apache.hadoop.yarn.server.resourcemanager.scheduler.event.NodeAddedSc
 import org.apache.hadoop.yarn.server.resourcemanager.scheduler.event.NodeRemovedSchedulerEvent;
 import org.apache.hadoop.yarn.server.resourcemanager.scheduler.event.NodeResourceUpdateSchedulerEvent;
 import org.apache.hadoop.yarn.server.resourcemanager.scheduler.event.NodeUpdateSchedulerEvent;
+import org.apache.hadoop.yarn.server.resourcemanager.scheduler.event.SchedulerEventType;
 import org.apache.hadoop.yarn.server.utils.BuilderUtils.ContainerIdComparator;
 import org.apache.hadoop.yarn.state.InvalidStateTransitonException;
 import org.apache.hadoop.yarn.state.MultipleArcTransition;
@@ -72,7 +73,7 @@ import com.google.common.annotations.VisibleForTesting;
 /**
  * This class is used to keep track of all the applications/containers
  * running on a node.
- *
+ * 该类表示ResourceManager上持有关于该NodeManager节点上应用和容器运行的一些信息
  */
 @Private
 @Unstable
@@ -87,6 +88,7 @@ public class RMNodeImpl implements RMNode, EventHandler<RMNodeEvent> {
   private final ReadLock readLock;
   private final WriteLock writeLock;
 
+  //一个队列,表示每次状态更新的时候,存储远程节点刚刚添加的容器以及刚刚完成的容器,内容由远程节点控制
   private final ConcurrentLinkedQueue<UpdatedContainerInfo> nodeUpdateQueue;
   private volatile boolean nextHeartBeat = true;
 
@@ -100,11 +102,11 @@ public class RMNodeImpl implements RMNode, EventHandler<RMNodeEvent> {
   private volatile Resource totalCapability;
   private final Node node;
 
-  private String healthReport;
-  private long lastHealthReportTime;
+  private String healthReport;//远程节点不健康的话,输出什么信息
+  private long lastHealthReportTime;//更新远程节点最后一次健康检查时间
   private String nodeManagerVersion;
 
-  /* set of containers that have just launched 启动的容器*/
+  /* set of containers that have just launched 说明节点上已经启动的容器,内容由远程节点控制*/
   private final Set<ContainerId> launchedContainers = new HashSet<ContainerId>();
 
   /* set of containers that need to be cleaned 待清理的容器*/
@@ -117,10 +119,10 @@ public class RMNodeImpl implements RMNode, EventHandler<RMNodeEvent> {
    */
   private final Set<ContainerId> containersToBeRemovedFromNM = new HashSet<ContainerId>();
 
-  /* the list of applications that have finished and need to be purged 完成的应用*/
+  /* the list of applications that have finished and need to be purged 已经完成的应用*/
   private final List<ApplicationId> finishedApplications = new ArrayList<ApplicationId>();
 
-  //记录该节点的上一次请求返回的信息
+  //记录该节点的上一次心跳请求返回的信息
   private NodeHeartbeatResponse latestNodeHeartBeatResponse = recordFactory.newRecordInstance(NodeHeartbeatResponse.class);
   
   private static final StateMachineFactory<RMNodeImpl,
@@ -361,6 +363,7 @@ public class RMNodeImpl implements RMNode, EventHandler<RMNodeEvent> {
     }
   }
 
+  //复制信息
   @Override
   public List<ApplicationId> getAppsToCleanup() {
     this.readLock.lock();
@@ -373,6 +376,7 @@ public class RMNodeImpl implements RMNode, EventHandler<RMNodeEvent> {
 
   }
   
+  //复制信息
   @Override
   public List<ContainerId> getContainersToCleanUp() {
 
@@ -492,8 +496,11 @@ public class RMNodeImpl implements RMNode, EventHandler<RMNodeEvent> {
     }
   }
 
+  //处理该应用在该远程节点已经启动了
   private static void handleRunningAppOnNode(RMNodeImpl rmNode,
       RMContext context, ApplicationId appId, NodeId nodeId) {
+	  
+	//确保资源管理器一定有该节点
     RMApp app = context.getRMApps().get(appId);
 
     // if we failed getting app by appId, maybe something wrong happened, just
@@ -509,7 +516,7 @@ public class RMNodeImpl implements RMNode, EventHandler<RMNodeEvent> {
   }
   
   /**
-   * 更新节点总资源
+   * 更新节点totalCapability总资源
    */
   private static void updateNodeResourceFromEvent(RMNodeImpl rmNode, 
      RMNodeResourceUpdateEvent event){
@@ -518,6 +525,9 @@ public class RMNodeImpl implements RMNode, EventHandler<RMNodeEvent> {
       rmNode.totalCapability = resourceOption.getResource();
   }
 
+  /**
+   * 由new状态改成Runing状态,表示该节点在注册时候触发 
+   */
   public static class AddNodeTransition implements
       SingleArcTransition<RMNodeImpl, RMNodeEvent> {
 
@@ -528,30 +538,37 @@ public class RMNodeImpl implements RMNode, EventHandler<RMNodeEvent> {
       List<NMContainerStatus> containers = null;
 
       String host = rmNode.nodeId.getHost();
+      
+      //key是host,value是RMNodeImpl,即已经在ResourceManager中激活的所有NodeManager节点与节点所在host的映射管理
       if (rmNode.context.getInactiveRMNodes().containsKey(host)) {
-        // Old node rejoining
+        // Old node rejoining 返回以前存在的节点
         RMNode previouRMNode = rmNode.context.getInactiveRMNodes().get(host);
+        //移除以前的host对应的NodeManager节点
         rmNode.context.getInactiveRMNodes().remove(host);
         rmNode.updateMetricsForRejoinedNode(previouRMNode.getState());
       } else {
         // Increment activeNodes explicitly because this is a new node.
-        ClusterMetrics.getMetrics().incrNumActiveNodes();
+        ClusterMetrics.getMetrics().incrNumActiveNodes();//加入统计全局中活跃的节点数量
+
+        //活跃的容器集合
         containers = startEvent.getNMContainerStatuses();
         if (containers != null && !containers.isEmpty()) {
           for (NMContainerStatus container : containers) {
-            if (container.getContainerState() == ContainerState.RUNNING) {
+            if (container.getContainerState() == ContainerState.RUNNING) {//容器如果是运行中,则加入到缓存中
               rmNode.launchedContainers.add(container.getContainerId());
             }
           }
         }
       }
       
+      //活跃的应用集合
       if (null != startEvent.getRunningApplications()) {
         for (ApplicationId appId : startEvent.getRunningApplications()) {
           handleRunningAppOnNode(rmNode, rmNode.context, appId, rmNode.nodeId);
         }
       }
 
+      //向调度器发起通知,哪些节点可用,以及哪些节点的哪些容器已经被加载了
       rmNode.context.getDispatcher().getEventHandler()
         .handle(new NodeAddedSchedulerEvent(rmNode, containers));
       rmNode.context.getDispatcher().getEventHandler().handle(
@@ -629,6 +646,11 @@ public class RMNodeImpl implements RMNode, EventHandler<RMNodeEvent> {
     }
   }
   
+  /**
+   * 当前接收的请求是RMNodeEventType.RESOURCE_UPDATE,即更新资源,并且此时的节点状态是NodeState.RUNNING的时候才进入该函数
+   * 1.更新节点totalCapability总资源
+   * 2.触发事件SchedulerEventType.NODE_RESOURCE_UPDATE,通知调度器集群资源有变化
+   */
   public static class UpdateNodeResourceWhenRunningTransition
       implements SingleArcTransition<RMNodeImpl, RMNodeEvent> {
 
@@ -642,6 +664,10 @@ public class RMNodeImpl implements RMNode, EventHandler<RMNodeEvent> {
     }
   }
   
+  /**
+   * 当前接收的请求是RMNodeEventType.RESOURCE_UPDATE,即更新资源,并且此时的节点状态是NodeState.NEW,DECOMMISSIONED,LOST,REBOOTED的时候才进入该函数
+   * 仅仅更新totalResource属性
+   */
   public static class UpdateNodeResourceWhenUnusableTransition
       implements SingleArcTransition<RMNodeImpl, RMNodeEvent> {
 
@@ -653,6 +679,163 @@ public class RMNodeImpl implements RMNode, EventHandler<RMNodeEvent> {
       updateNodeResourceFromEvent(rmNode, (RMNodeResourceUpdateEvent)event);
       // No need to notify scheduler as schedulerNode is not function now
       // and can sync later from RMnode.
+    }
+  }
+  
+  /**
+   * 状态更新
+   * 在集群正常运转的情况下,产生的状态更新事件
+   */
+  public static class StatusUpdateWhenHealthyTransition implements
+      MultipleArcTransition<RMNodeImpl, RMNodeEvent, NodeState> {
+    @Override
+    public NodeState transition(RMNodeImpl rmNode, RMNodeEvent event) {
+
+      RMNodeStatusEvent statusEvent = (RMNodeStatusEvent) event;
+
+      // Switch the last heartbeatresponse.
+      //记录该节点的上一次心跳请求返回的信息
+      rmNode.latestNodeHeartBeatResponse = statusEvent.getLatestResponse();
+
+      //记录上一次远程节点的健康检查统计信息
+      NodeHealthStatus remoteNodeHealthStatus = statusEvent.getNodeHealthStatus();
+      //记录远程节点上一次健康检查的报告信息,如果检查有问题,则会产生提示字符串
+      rmNode.setHealthReport(remoteNodeHealthStatus.getHealthReport());
+      //记录远程节点上一次健康检查的时间
+      rmNode.setLastHealthReportTime(
+          remoteNodeHealthStatus.getLastHealthReportTime());
+      
+      //说明远程节点已经不健康了
+      if (!remoteNodeHealthStatus.getIsNodeHealthy()) {
+        LOG.info("Node " + rmNode.nodeId + " reported UNHEALTHY with details: "
+            + remoteNodeHealthStatus.getHealthReport());//报告检查失败的信息
+        rmNode.nodeUpdateQueue.clear();
+        // Inform the scheduler 当某一个节点不健康了,则从调度器移除该节点
+        rmNode.context.getDispatcher().getEventHandler().handle(
+            new NodeRemovedSchedulerEvent(rmNode));
+        rmNode.context.getDispatcher().getEventHandler().handle(
+            new NodesListManagerEvent(
+                NodesListManagerEventType.NODE_UNUSABLE, rmNode));
+        // Update metrics
+        rmNode.updateMetricsForDeactivatedNode(rmNode.getState(),
+            NodeState.UNHEALTHY);
+        return NodeState.UNHEALTHY;//返回不健康状态
+      }
+
+      // Filter the map to only obtain just launched containers and finished
+      // containers.
+      //本次状态更新,发现远程节点新启动的容器集合
+      List<ContainerStatus> newlyLaunchedContainers = 
+          new ArrayList<ContainerStatus>();
+      //本次状态更新,发现远程节点已经完成的的容器集合
+      List<ContainerStatus> completedContainers = 
+          new ArrayList<ContainerStatus>();
+      
+      //循环每一个节点的容器信息
+      for (ContainerStatus remoteContainer : statusEvent.getContainers()) {
+        ContainerId containerId = remoteContainer.getContainerId();
+
+        //如果该容器已经在调度器中被设置为去清理或者该容器对应的应用已经在调度器中设置成完成了,则都不在进一步处理了,因此continue
+        // Don't bother with containers already scheduled for cleanup, or for
+        // applications already killed. The scheduler doens't need to know any
+        // more about this container
+        if (rmNode.containersToClean.contains(containerId)) {
+          LOG.info("Container " + containerId + " already scheduled for " +
+          		"cleanup, no further processing");
+          continue;
+        }
+        if (rmNode.finishedApplications.contains(containerId
+            .getApplicationAttemptId().getApplicationId())) {
+          LOG.info("Container " + containerId
+              + " belongs to an application that is already killed,"
+              + " no further processing");
+          continue;
+        }
+
+        // Process running containers远程的该容器的状态是运行中,并且本地管理的容器说明没有被启动,则加入到启动容器中
+        if (remoteContainer.getState() == ContainerState.RUNNING) {
+          if (!rmNode.launchedContainers.contains(containerId)) {
+            // Just launched container. RM knows about it the first time.
+            rmNode.launchedContainers.add(containerId);
+            newlyLaunchedContainers.add(remoteContainer);
+          }
+        } else {//如果该容器已经不是运行的,则从运行的容器中移除
+          // A finished container
+          rmNode.launchedContainers.remove(containerId);
+          completedContainers.add(remoteContainer);
+        }
+      }
+      
+      //发现新的容器被跟踪到了,或者是刚刚启动,也或者是刚刚完成该容器
+      if(newlyLaunchedContainers.size() != 0 
+          || completedContainers.size() != 0) {
+        rmNode.nodeUpdateQueue.add(new UpdatedContainerInfo
+            (newlyLaunchedContainers, completedContainers));
+      }
+      
+      
+      //通知调度器,一些节点的容器有变更.即远程节点有新容器被启动或者老容器被完成
+      if(rmNode.nextHeartBeat) {
+        rmNode.nextHeartBeat = false;
+        rmNode.context.getDispatcher().getEventHandler().handle(
+            new NodeUpdateSchedulerEvent(rmNode));
+      }
+
+      // Update DTRenewer in secure mode to keep these apps alive. Today this is
+      // needed for log-aggregation to finish long after the apps are gone.
+      if (UserGroupInformation.isSecurityEnabled()) {
+        rmNode.context.getDelegationTokenRenewer().updateKeepAliveApplications(
+          statusEvent.getKeepAliveAppIds());
+      }
+
+      //依然返回健康的运行状态
+      return NodeState.RUNNING;
+    }
+  }
+  
+  /**
+   * 状态更新
+   * 1.记录远程节点最后请求的信息
+   * 2.记录远程节点如果健康检查失败的话,返回什么失败内容
+   * 3.记录远程节点最后一次检查健康的时间。
+   * 4.如果现在远程节点已经健康了,则发送事件
+   *   a.SchedulerEventType.NODE_ADDED 目的是通知调度器,集群中增加了一个节点
+   *   b.NodesListManagerEventType.NODE_USABLE 目的是通知节点已经可以使用了
+   */
+  public static class StatusUpdateWhenUnHealthyTransition implements
+      MultipleArcTransition<RMNodeImpl, RMNodeEvent, NodeState> {
+
+    @Override
+    public NodeState transition(RMNodeImpl rmNode, RMNodeEvent event) {
+      RMNodeStatusEvent statusEvent = (RMNodeStatusEvent) event;
+
+      // Switch the last heartbeatresponse.
+      //记录该节点的上一次心跳请求返回的信息
+      rmNode.latestNodeHeartBeatResponse = statusEvent.getLatestResponse();
+      //获取该节点是否健康的回复对象
+      NodeHealthStatus remoteNodeHealthStatus = statusEvent.getNodeHealthStatus();
+      //不健康的话,输出什么信息
+      rmNode.setHealthReport(remoteNodeHealthStatus.getHealthReport());
+      //更新远程节点最后一次健康检查时间
+      rmNode.setLastHealthReportTime(
+          remoteNodeHealthStatus.getLastHealthReportTime());
+      
+      if (remoteNodeHealthStatus.getIsNodeHealthy()) {//远程节点依然健康
+        rmNode.context.getDispatcher().getEventHandler().handle(
+            new NodeAddedSchedulerEvent(rmNode));
+        rmNode.context.getDispatcher().getEventHandler().handle(
+                new NodesListManagerEvent(
+                    NodesListManagerEventType.NODE_USABLE, rmNode));
+        // ??? how about updating metrics before notifying to ensure that
+        // notifiers get update metadata because they will very likely query it
+        // upon notification
+        // Update metrics
+        rmNode.updateMetricsForRejoinedNode(NodeState.UNHEALTHY);
+        return NodeState.RUNNING;//说明该节点依然健康
+      }
+
+      //说明该节点已经不健康了
+      return NodeState.UNHEALTHY;
     }
   }
   
@@ -720,128 +903,9 @@ public class RMNodeImpl implements RMNode, EventHandler<RMNodeEvent> {
     }
   }
 
-  public static class StatusUpdateWhenHealthyTransition implements
-      MultipleArcTransition<RMNodeImpl, RMNodeEvent, NodeState> {
-    @Override
-    public NodeState transition(RMNodeImpl rmNode, RMNodeEvent event) {
-
-      RMNodeStatusEvent statusEvent = (RMNodeStatusEvent) event;
-
-      // Switch the last heartbeatresponse.
-      rmNode.latestNodeHeartBeatResponse = statusEvent.getLatestResponse();
-
-      NodeHealthStatus remoteNodeHealthStatus = 
-          statusEvent.getNodeHealthStatus();
-      rmNode.setHealthReport(remoteNodeHealthStatus.getHealthReport());
-      rmNode.setLastHealthReportTime(
-          remoteNodeHealthStatus.getLastHealthReportTime());
-      if (!remoteNodeHealthStatus.getIsNodeHealthy()) {
-        LOG.info("Node " + rmNode.nodeId + " reported UNHEALTHY with details: "
-            + remoteNodeHealthStatus.getHealthReport());
-        rmNode.nodeUpdateQueue.clear();
-        // Inform the scheduler
-        rmNode.context.getDispatcher().getEventHandler().handle(
-            new NodeRemovedSchedulerEvent(rmNode));
-        rmNode.context.getDispatcher().getEventHandler().handle(
-            new NodesListManagerEvent(
-                NodesListManagerEventType.NODE_UNUSABLE, rmNode));
-        // Update metrics
-        rmNode.updateMetricsForDeactivatedNode(rmNode.getState(),
-            NodeState.UNHEALTHY);
-        return NodeState.UNHEALTHY;
-      }
-
-      // Filter the map to only obtain just launched containers and finished
-      // containers.
-      List<ContainerStatus> newlyLaunchedContainers = 
-          new ArrayList<ContainerStatus>();
-      List<ContainerStatus> completedContainers = 
-          new ArrayList<ContainerStatus>();
-      for (ContainerStatus remoteContainer : statusEvent.getContainers()) {
-        ContainerId containerId = remoteContainer.getContainerId();
-
-        // Don't bother with containers already scheduled for cleanup, or for
-        // applications already killed. The scheduler doens't need to know any
-        // more about this container
-        if (rmNode.containersToClean.contains(containerId)) {
-          LOG.info("Container " + containerId + " already scheduled for " +
-          		"cleanup, no further processing");
-          continue;
-        }
-        if (rmNode.finishedApplications.contains(containerId
-            .getApplicationAttemptId().getApplicationId())) {
-          LOG.info("Container " + containerId
-              + " belongs to an application that is already killed,"
-              + " no further processing");
-          continue;
-        }
-
-        // Process running containers
-        if (remoteContainer.getState() == ContainerState.RUNNING) {
-          if (!rmNode.launchedContainers.contains(containerId)) {
-            // Just launched container. RM knows about it the first time.
-            rmNode.launchedContainers.add(containerId);
-            newlyLaunchedContainers.add(remoteContainer);
-          }
-        } else {
-          // A finished container
-          rmNode.launchedContainers.remove(containerId);
-          completedContainers.add(remoteContainer);
-        }
-      }
-      if(newlyLaunchedContainers.size() != 0 
-          || completedContainers.size() != 0) {
-        rmNode.nodeUpdateQueue.add(new UpdatedContainerInfo
-            (newlyLaunchedContainers, completedContainers));
-      }
-      if(rmNode.nextHeartBeat) {
-        rmNode.nextHeartBeat = false;
-        rmNode.context.getDispatcher().getEventHandler().handle(
-            new NodeUpdateSchedulerEvent(rmNode));
-      }
-
-      // Update DTRenewer in secure mode to keep these apps alive. Today this is
-      // needed for log-aggregation to finish long after the apps are gone.
-      if (UserGroupInformation.isSecurityEnabled()) {
-        rmNode.context.getDelegationTokenRenewer().updateKeepAliveApplications(
-          statusEvent.getKeepAliveAppIds());
-      }
-
-      return NodeState.RUNNING;
-    }
-  }
-
-  public static class StatusUpdateWhenUnHealthyTransition implements
-      MultipleArcTransition<RMNodeImpl, RMNodeEvent, NodeState> {
-
-    @Override
-    public NodeState transition(RMNodeImpl rmNode, RMNodeEvent event) {
-      RMNodeStatusEvent statusEvent = (RMNodeStatusEvent) event;
-
-      // Switch the last heartbeatresponse.
-      rmNode.latestNodeHeartBeatResponse = statusEvent.getLatestResponse();
-      NodeHealthStatus remoteNodeHealthStatus = statusEvent.getNodeHealthStatus();
-      rmNode.setHealthReport(remoteNodeHealthStatus.getHealthReport());
-      rmNode.setLastHealthReportTime(
-          remoteNodeHealthStatus.getLastHealthReportTime());
-      if (remoteNodeHealthStatus.getIsNodeHealthy()) {
-        rmNode.context.getDispatcher().getEventHandler().handle(
-            new NodeAddedSchedulerEvent(rmNode));
-        rmNode.context.getDispatcher().getEventHandler().handle(
-                new NodesListManagerEvent(
-                    NodesListManagerEventType.NODE_USABLE, rmNode));
-        // ??? how about updating metrics before notifying to ensure that
-        // notifiers get update metadata because they will very likely query it
-        // upon notification
-        // Update metrics
-        rmNode.updateMetricsForRejoinedNode(NodeState.UNHEALTHY);
-        return NodeState.RUNNING;
-      }
-
-      return NodeState.UNHEALTHY;
-    }
-  }
-
+  /**
+   * 获取所有的远程节点刚刚新启动的容器以及完成的容器
+   */
   @Override
   public List<UpdatedContainerInfo> pullContainerUpdates() {
     List<UpdatedContainerInfo> latestContainerInfoList = 

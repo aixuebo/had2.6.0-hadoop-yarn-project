@@ -62,7 +62,8 @@ class LocalResourcesTrackerImpl implements LocalResourcesTracker {
   private final String user;//该应用的所有者
   private final ApplicationId appId;//该应用
   private final Dispatcher dispatcher;
-  //请求来的时候,会为每一个要下载的对象，生成一个LocalizedResource对象
+  //请求来的时候,会为每一个要下载的对象
+  //key是等待下载的资源信息,value表示本地针对该资源信息,最终加载的情况的反应
   private final ConcurrentMap<LocalResourceRequest,LocalizedResource> localrsrc;
   private Configuration conf;
   /*
@@ -121,7 +122,7 @@ class LocalResourcesTrackerImpl implements LocalResourcesTracker {
   @Override
   public synchronized void handle(ResourceEvent event) {
     LocalResourceRequest req = event.getLocalResourceRequest();
-    LocalizedResource rsrc = localrsrc.get(req);
+    LocalizedResource rsrc = localrsrc.get(req);//本地是否已经存在了该资源
     switch (event.getType()) {
     case LOCALIZED://下载完成
       if (useLocalCacheDirectoryManager) {
@@ -131,6 +132,7 @@ class LocalResourcesTrackerImpl implements LocalResourcesTracker {
     case REQUEST:
       //请求来的时候,会为每一个要下载的对象，生成一个LocalizedResource对象
       //如果该资源以前存在,则删除,说明以前的资源丢失了,重新来
+      //isResourcePresent,false表示本地不存在该资源,true表示本地已经存在了该资源
       if (rsrc != null && (!isResourcePresent(rsrc))) {
         LOG.info("Resource " + rsrc.getLocalPath()
             + " is missing, localizing it again");
@@ -298,6 +300,7 @@ class LocalResourcesTrackerImpl implements LocalResourcesTracker {
    * 
    * @param rsrc
    * @return true/false based on resource is present or not
+   * false表示本地不存在该资源,true表示本地已经存在了该资源
    */
   public boolean isResourcePresent(LocalizedResource rsrc) {
     boolean ret = true;

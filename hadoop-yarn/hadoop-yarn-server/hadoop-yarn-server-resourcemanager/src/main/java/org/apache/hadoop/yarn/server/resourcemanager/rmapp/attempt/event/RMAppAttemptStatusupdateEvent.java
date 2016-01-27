@@ -22,6 +22,9 @@ import org.apache.hadoop.yarn.api.records.ApplicationAttemptId;
 import org.apache.hadoop.yarn.server.resourcemanager.rmapp.attempt.RMAppAttemptEvent;
 import org.apache.hadoop.yarn.server.resourcemanager.rmapp.attempt.RMAppAttemptEventType;
 
+/**
+ * 更新AM的执行进度
+ */
 public class RMAppAttemptStatusupdateEvent extends RMAppAttemptEvent {
 
   private final float progress;

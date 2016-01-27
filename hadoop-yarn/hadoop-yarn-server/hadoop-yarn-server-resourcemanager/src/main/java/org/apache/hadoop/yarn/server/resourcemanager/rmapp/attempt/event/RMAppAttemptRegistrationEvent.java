@@ -22,11 +22,14 @@ import org.apache.hadoop.yarn.api.records.ApplicationAttemptId;
 import org.apache.hadoop.yarn.server.resourcemanager.rmapp.attempt.RMAppAttemptEvent;
 import org.apache.hadoop.yarn.server.resourcemanager.rmapp.attempt.RMAppAttemptEventType;
 
+/**
+ * 当AM注册到RM的时候,发送一个事件
+ */
 public class RMAppAttemptRegistrationEvent extends RMAppAttemptEvent {
 
-  private final ApplicationAttemptId appAttemptId;
-  private final String host;
-  private int rpcport;
+  private final ApplicationAttemptId appAttemptId;//注册的应用ID
+  private final String host;//AM在哪个host允许
+  private int rpcport;//AM的rpc通讯端口
   private String trackingurl;
 
   public RMAppAttemptRegistrationEvent(ApplicationAttemptId appAttemptId,

@@ -23,11 +23,7 @@ import org.apache.commons.logging.Log;
 public class SchedulerAppUtils {
 
   /**
-   * true表示该节点是任务的黑名单节点.黑名单意义是节点或者rack都是黑名单
-   * @param application
-   * @param node
-   * @param LOG
-   * @return
+   * true表示该节点是任务的黑名单节点.黑名单意义是节点或者rack是黑名单
    */
   public static  boolean isBlacklisted(SchedulerApplicationAttempt application,
       SchedulerNode node, Log LOG) {

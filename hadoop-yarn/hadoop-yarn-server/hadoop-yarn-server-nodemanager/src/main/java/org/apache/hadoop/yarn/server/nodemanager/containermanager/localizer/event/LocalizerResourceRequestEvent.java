@@ -26,6 +26,7 @@ import org.apache.hadoop.yarn.util.ConverterUtils;
 /**
  * Event indicating that the {@link ResourceLocalizationService}
  * should fetch this resource.
+ * 本地化容器初始化资源请求
  */
 public class LocalizerResourceRequestEvent extends LocalizerEvent {
 

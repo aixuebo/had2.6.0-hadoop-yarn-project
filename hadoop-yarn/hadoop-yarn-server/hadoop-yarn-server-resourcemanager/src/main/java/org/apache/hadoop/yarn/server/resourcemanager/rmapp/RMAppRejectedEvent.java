@@ -20,9 +20,12 @@ package org.apache.hadoop.yarn.server.resourcemanager.rmapp;
 
 import org.apache.hadoop.yarn.api.records.ApplicationId;
 
+/**
+ * app拒绝时候产生的事件,比如权限不对，不允许提交
+ */
 public class RMAppRejectedEvent extends RMAppEvent {
 
-  private final String message;
+  private final String message;//提示信息
 
   /**
    * app拒绝

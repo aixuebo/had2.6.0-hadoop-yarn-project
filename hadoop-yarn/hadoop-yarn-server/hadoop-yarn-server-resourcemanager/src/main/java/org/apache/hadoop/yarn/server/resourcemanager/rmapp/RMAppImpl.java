@@ -114,11 +114,15 @@ public class RMAppImpl implements RMApp, Recoverable {
   private final YarnScheduler scheduler;
   private final ApplicationMasterService masterService;
   private final StringBuilder diagnostics = new StringBuilder();
-  private final int maxAppAttempts;
   private final ReadLock readLock;
   private final WriteLock writeLock;
+  
+  private final int maxAppAttempts;//该app最多允许多少个尝试任务
+  //该app每一个尝试任务对应的映射表
   private final Map<ApplicationAttemptId, RMAppAttempt> attempts = new LinkedHashMap<ApplicationAttemptId, RMAppAttempt>();
   private final long submitTime;
+  
+  //一个Node节点更新,由NODE_USABLE和NODE_UNUSABLE之间产生了替换 ,更改的Node集合
   private final Set<RMNode> updatedNodes = new HashSet<RMNode>();
   private final String applicationType;
   private final Set<String> applicationTags;
@@ -528,6 +532,11 @@ public class RMAppImpl implements RMApp, Recoverable {
     throw new YarnRuntimeException("Unknown state passed!");
   }
 
+  /**
+   * 拉去Node节点变更的节点集合
+   * 将变更的节点集合添加到参数集合中
+   * 返回变更的节点数
+   */
   @Override
   public int pullRMNodeUpdates(Collection<RMNode> updatedNodes) {
     this.writeLock.lock();
@@ -740,6 +749,7 @@ public class RMAppImpl implements RMApp, Recoverable {
     }
   }
 
+  //创建一个RMAppAttempt实例
   private void createNewAttempt() {
     ApplicationAttemptId appAttemptId =
         ApplicationAttemptId.newInstance(applicationId, attempts.size() + 1);
@@ -762,6 +772,7 @@ public class RMAppImpl implements RMApp, Recoverable {
       transferStateFromPreviousAttempt));
   }
 
+  //一个Node节点更新,由NODE_USABLE和NODE_UNUSABLE之间产生了替换 
   private void processNodeUpdate(RMAppNodeUpdateType type, RMNode node) {
     NodeState nodeState = node.getState();
     updatedNodes.add(node);
@@ -776,6 +787,9 @@ public class RMAppImpl implements RMApp, Recoverable {
 
   }
 
+  /**
+   * 一个Node节点更新,由NODE_USABLE和NODE_UNUSABLE之间产生了替换 
+   */
   private static final class RMAppNodeUpdateTransition extends RMAppTransition {
     public void transition(RMAppImpl app, RMAppEvent event) {
       RMAppNodeUpdateEvent nodeUpdateEvent = (RMAppNodeUpdateEvent) event;
@@ -896,6 +910,7 @@ public class RMAppImpl implements RMApp, Recoverable {
     }
   }
 
+  //一个app提交到调度器中
   private static final class AddApplicationToSchedulerTransition extends
       RMAppTransition {
     @Override
@@ -906,6 +921,9 @@ public class RMAppImpl implements RMApp, Recoverable {
     }
   }
 
+  /**
+   * 当调度器接受了该应用,则调用该方法
+   */
   private static final class StartAppAttemptTransition extends RMAppTransition {
     @Override
     public void transition(RMAppImpl app, RMAppEvent event) {
@@ -961,6 +979,9 @@ public class RMAppImpl implements RMApp, Recoverable {
     return msg;
   }
 
+  /**
+   * 保存appId日志,说明该app已经提交到RM中了
+   */
   private static final class RMAppNewlySavingTransition extends RMAppTransition {
     @Override
     public void transition(RMAppImpl app, RMAppEvent event) {

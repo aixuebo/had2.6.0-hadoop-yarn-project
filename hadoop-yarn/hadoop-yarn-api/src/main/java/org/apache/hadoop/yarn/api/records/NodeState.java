@@ -34,18 +34,23 @@ public enum NodeState {
   /** Running node */
   RUNNING, 
   
-  /** Node is unhealthy */
+  /** Node is unhealthy 节点不健康*/
   UNHEALTHY, 
   
-  /** Node is out of service */
+  /** Node is out of service 节点要退出服务,不在提供服务,即节点要退役*/
   DECOMMISSIONED, 
   
-  /** Node has not sent a heartbeat for some configured time threshold*/
+  /** Node has not sent a heartbeat for some configured time threshold
+   * 节点不能发送心跳了
+   **/
   LOST, 
   
-  /** Node has rebooted */
+  /** Node has rebooted
+   *  重新启动该节点
+   **/
   REBOOTED;
   
+  //不健康、退役、不能发送心跳了,都称之为节点不可用,返回true
   public boolean isUnusable() {
     return (this == UNHEALTHY || this == DECOMMISSIONED || this == LOST);
   }

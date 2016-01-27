@@ -20,9 +20,12 @@ package org.apache.hadoop.yarn.server.nodemanager.containermanager.container;
 
 import org.apache.hadoop.yarn.api.records.ContainerId;
 
+/**
+ * 容器退出事件
+ */
 public class ContainerExitEvent extends ContainerEvent {
-  private int exitCode;
-  private final String diagnosticInfo;
+  private int exitCode;//退出状态码
+  private final String diagnosticInfo;//退出时候的信息
 
   public ContainerExitEvent(ContainerId cID, ContainerEventType eventType,
       int exitCode, String diagnosticInfo) {

@@ -104,6 +104,7 @@ public class ActiveUsersManager {
    * Get number of active users i.e. users with applications which have pending
    * resource requests.
    * @return number of active users
+   * 当前集群有多少活跃用户
    */
   @Lock({Queue.class, SchedulerApplicationAttempt.class})
   synchronized public int getNumActiveUsers() {

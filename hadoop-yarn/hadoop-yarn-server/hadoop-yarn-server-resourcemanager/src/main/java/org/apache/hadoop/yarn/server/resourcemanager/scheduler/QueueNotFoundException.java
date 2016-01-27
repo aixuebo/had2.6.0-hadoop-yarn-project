@@ -21,6 +21,7 @@ package org.apache.hadoop.yarn.server.resourcemanager.scheduler;
 import org.apache.hadoop.classification.InterfaceAudience.Private;
 import org.apache.hadoop.yarn.exceptions.YarnRuntimeException;
 
+//队列没有被找到异常
 @Private
 public class QueueNotFoundException extends YarnRuntimeException {
 

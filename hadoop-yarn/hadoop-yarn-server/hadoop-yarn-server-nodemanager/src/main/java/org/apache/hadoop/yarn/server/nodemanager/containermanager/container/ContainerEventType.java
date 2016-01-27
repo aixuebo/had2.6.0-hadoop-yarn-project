@@ -35,7 +35,9 @@ public enum ContainerEventType {
 
   // Producer: ContainersLauncher
   CONTAINER_LAUNCHED,//准备启动容器事件
-  CONTAINER_EXITED_WITH_SUCCESS,
-  CONTAINER_EXITED_WITH_FAILURE,
+  
+  CONTAINER_EXITED_WITH_SUCCESS,//容器成功完成事件
+  CONTAINER_EXITED_WITH_FAILURE,//容器执行过程中失败了
+  
   CONTAINER_KILLED_ON_REQUEST,//在请求阶段容器就被kill掉
 }

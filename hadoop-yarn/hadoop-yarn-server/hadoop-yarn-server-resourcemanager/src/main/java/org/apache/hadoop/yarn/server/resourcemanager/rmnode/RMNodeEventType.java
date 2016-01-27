@@ -20,16 +20,16 @@ package org.apache.hadoop.yarn.server.resourcemanager.rmnode;
 
 public enum RMNodeEventType {
   
-  STARTED,
+  STARTED,//由new状态改成Runing状态,表示该节点在注册时候触发 
   
   // Source: AdminService
   DECOMMISSION,
   
   // Source: AdminService, ResourceTrackerService
-  RESOURCE_UPDATE,
+  RESOURCE_UPDATE,//更新该NodeManager上节点的资源信息事件
 
   // ResourceTrackerService
-  STATUS_UPDATE,
+  STATUS_UPDATE,//更新该NodeManager上节点的状态信息
   REBOOTING,
   RECONNECTED,
 

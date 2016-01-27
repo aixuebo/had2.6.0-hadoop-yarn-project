@@ -129,7 +129,7 @@ public class FiCaSchedulerApp extends SchedulerApplicationAttempt {
       return null;
     }
     
-    // Create RMContainer
+    // Create RMContainer 创建容器类
     RMContainer rmContainer = new RMContainerImpl(container, this
         .getApplicationAttemptId(), node.getNodeID(),
         appSchedulingInfo.getUser(), this.rmContext);

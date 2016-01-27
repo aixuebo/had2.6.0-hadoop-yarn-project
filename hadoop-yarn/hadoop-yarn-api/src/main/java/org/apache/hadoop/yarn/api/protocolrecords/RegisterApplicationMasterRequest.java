@@ -36,7 +36,7 @@ import org.apache.hadoop.yarn.util.Records;
  * </p>
  * 
  * @see ApplicationMasterProtocol#registerApplicationMaster(RegisterApplicationMasterRequest)
- * MRAppMaster所在服务器的ip以及提供http的端口信息
+ * MRAppMaster所在服务器的ip以及提供http的端口信息,即一个ApplicationMaster实现类  要注册到 RM上的请求
  */
 @Public
 @Stable

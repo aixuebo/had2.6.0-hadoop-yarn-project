@@ -20,6 +20,7 @@ package org.apache.hadoop.yarn.server.resourcemanager.rmapp.attempt;
 
 import org.apache.hadoop.yarn.api.records.ApplicationAttemptId;
 
+//创建RMAppAttempt实例,因为调度器已经接受了该app,所以该需要创建RMAppAttempt实例了
 public class RMAppStartAttemptEvent extends RMAppAttemptEvent {
 
   private final boolean transferStateFromPreviousAttempt;

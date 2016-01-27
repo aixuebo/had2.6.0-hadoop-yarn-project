@@ -73,6 +73,9 @@ import org.apache.hadoop.yarn.util.YarnVersionInfo;
 
 import com.google.common.annotations.VisibleForTesting;
 
+/**
+ * 节点可以向ResourceManager注册节点、发送心跳
+ */
 public class ResourceTrackerService extends AbstractService implements
     ResourceTracker {
 
@@ -88,15 +91,18 @@ public class ResourceTrackerService extends AbstractService implements
   private final NMTokenSecretManagerInRM nmTokenSecretManager;
 
   private long nextHeartBeatInterval;
-  private Server server;
-  private InetSocketAddress resourceTrackerAddress;
-  private String minimumNodeManagerVersion;//该ResourceManager允许的最小的版本号
+  
+  private Server server;//ResourceTracker接口的服务器端实现类
+  private InetSocketAddress resourceTrackerAddress;//ResourceTracker接口的服务器端ip:port
+  
+  
+  private String minimumNodeManagerVersion;//表示一个NodeManager节点最小要提供的版本号
 
   private static final NodeHeartbeatResponse resync = recordFactory.newRecordInstance(NodeHeartbeatResponse.class);
   private static final NodeHeartbeatResponse shutDown = recordFactory.newRecordInstance(NodeHeartbeatResponse.class);
   
-  private int minAllocMb;
-  private int minAllocVcores;
+  private int minAllocMb;//表示一个NodeManager节点最小要提供的内存总资源也不能小于此值
+  private int minAllocVcores;//表示一个NodeManager节点最小要提供的CPU总资源也不能小于此值
 
   static {
     resync.setNodeAction(NodeAction.RESYNC);
@@ -260,12 +266,12 @@ public class ResourceTrackerService extends AbstractService implements
      * 该ResourceManager允许的最小的版本号,如果注册的节点持有的版本号比该版本号还小,则抛异常
      */
     if (!minimumNodeManagerVersion.equals("NONE")) {
-      if (minimumNodeManagerVersion.equals("EqualToRM")) {
-        minimumNodeManagerVersion = YarnVersionInfo.getVersion();
+      if (minimumNodeManagerVersion.equals("EqualToRM")) {//与RM的版本相同
+        minimumNodeManagerVersion = YarnVersionInfo.getVersion();//获取RM的版本
       }
 
       if ((nodeManagerVersion == null) ||
-          (VersionUtil.compareVersions(nodeManagerVersion,minimumNodeManagerVersion)) < 0) {
+          (VersionUtil.compareVersions(nodeManagerVersion,minimumNodeManagerVersion)) < 0) {//NodeManager上的版本号过小,不合标准
         String message =
             "Disallowed NodeManager Version " + nodeManagerVersion
                 + ", is less than the minimum version "
@@ -282,7 +288,7 @@ public class ResourceTrackerService extends AbstractService implements
      * 如果白名单没有通过,返回信息
      */
     // Check if this node is a 'valid' node
-    if (!this.nodesListManager.isValidNode(host)) {
+    if (!this.nodesListManager.isValidNode(host)) {//说明该host是黑名单.因此要退出
       String message =
           "Disallowed NodeManager from  " + host
               + ", Sending SHUTDOWN signal to the NodeManager.";
@@ -436,7 +442,7 @@ public class ResourceTrackerService extends AbstractService implements
       nodeHeartBeatResponse.setSystemCredentialsForApps(systemCredentials);
     }
 
-    // 4. Send status to RMNode, saving the latest response.
+    // 4. Send status to RMNode, saving the latest response.开启更新该节点的状态事件
     this.rmContext.getDispatcher().getEventHandler().handle(
         new RMNodeStatusEvent(nodeId, remoteNodeStatus.getNodeHealthStatus(),
             remoteNodeStatus.getContainersStatuses(), 

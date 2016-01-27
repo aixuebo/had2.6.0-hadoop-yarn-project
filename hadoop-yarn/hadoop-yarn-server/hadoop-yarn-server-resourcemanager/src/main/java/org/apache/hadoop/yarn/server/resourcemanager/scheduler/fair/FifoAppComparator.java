@@ -27,6 +27,8 @@ import org.apache.hadoop.classification.InterfaceStability.Unstable;
 /**
  * Order {@link FSAppAttempt} objects by priority and then by submit time, as
  * in the default scheduler in Hadoop.
+ * 先进先出比较器
+ * 先比较优先级--再比较开始时间--最后比较appId
  */
 @Private
 @Unstable

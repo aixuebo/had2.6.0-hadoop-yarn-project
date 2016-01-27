@@ -23,6 +23,9 @@ import org.apache.hadoop.yarn.exceptions.YarnException;
 import org.apache.hadoop.yarn.server.nodemanager.api.protocolrecords.LocalizerHeartbeatResponse;
 import org.apache.hadoop.yarn.server.nodemanager.api.protocolrecords.LocalizerStatus;
 
+/**
+ * ContainerLocalizer本地下载容器对nodemanager发送心跳信息,报告
+ */
 public interface LocalizationProtocol {
   public LocalizerHeartbeatResponse heartbeat(LocalizerStatus status)
       throws YarnException, IOException;

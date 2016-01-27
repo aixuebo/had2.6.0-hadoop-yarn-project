@@ -21,6 +21,10 @@ import org.apache.hadoop.yarn.api.records.LocalResource;
 import org.apache.hadoop.yarn.api.records.SerializedException;
 import org.apache.hadoop.yarn.api.records.URL;
 
+/**
+ * 表示在下载容器内,每一个正在下载的对象状态信息
+ * 参见LocalizerStatus
+ */
 public interface LocalResourceStatus {
   public LocalResource getResource();//该资源信息
   public ResourceStatusType getStatus();//资源加载的完成状态

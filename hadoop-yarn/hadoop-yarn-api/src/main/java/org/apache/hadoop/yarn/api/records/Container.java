@@ -71,10 +71,10 @@ public abstract class Container implements Comparable<Container> {
       String nodeHttpAddress, Resource resource, Priority priority,
       Token containerToken) {
     Container container = Records.newRecord(Container.class);
-    container.setId(containerId);
-    container.setNodeId(nodeId);
-    container.setNodeHttpAddress(nodeHttpAddress);
-    container.setResource(resource);
+    container.setId(containerId);//容器ID,即APP的尝试任务上上第几个容器
+    container.setNodeId(nodeId);//该容器准备分配给哪个节点上执行
+    container.setNodeHttpAddress(nodeHttpAddress);//该节点上的ip
+    container.setResource(resource);//该容器所需要的资源
     container.setPriority(priority);
     container.setContainerToken(containerToken);
     return container;

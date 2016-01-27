@@ -149,7 +149,11 @@ public class FifoScheduler extends
       return queueInfo;
     }
 
+    /**
+     * 调度队列的权限,一个是提交权限,一个是管理权限
+     */
     public Map<QueueACL, AccessControlList> getQueueAcls() {
+     //key是提交权限或者管理权限,value是存储使用某个权限的用户和用户组
       Map<QueueACL, AccessControlList> acls =
         new HashMap<QueueACL, AccessControlList>();
       for (QueueACL acl : QueueACL.values()) {
@@ -168,11 +172,15 @@ public class FifoScheduler extends
       return Collections.singletonList(queueUserAclInfo);
     }
 
+    /**
+     * 判断该user是否有acl权限,即是否有提交或者访问集群权限
+     */
     @Override
     public boolean hasAccess(QueueACL acl, UserGroupInformation user) {
       return getQueueAcls().get(acl).isUserAllowed(user);
     }
     
+    //获取该队列的活跃用户管理对象
     @Override
     public ActiveUsersManager getActiveUsersManager() {
       return activeUsersManager;
@@ -342,7 +350,7 @@ public class FifoScheduler extends
 
       application.updateBlacklist(blacklistAdditions, blacklistRemovals);
       ContainersAndNMTokensAllocation allocation =
-          application.pullNewlyAllocatedContainersAndNMTokens();
+          application.pullNewlyAllocatedContainersAndNMTokens();//从调度器中已经为该应用分配的容器,将这些容器发送给AM
       return new Allocation(allocation.getContainerList(),
         application.getHeadroom(), null, null, null,
         allocation.getNMTokenList());
@@ -457,16 +465,17 @@ public class FifoScheduler extends
    * Heart of the scheduler...
    * 
    * @param node node on which resources are available to be allocated
+   * 准备在该节点上调度一些任务
    */
   private void assignContainers(FiCaSchedulerNode node) {
     LOG.debug("assignContainers:" +
         " node=" + node.getRMNode().getNodeAddress() + 
         " #applications=" + applications.size());
 
-    // Try to assign containers to applications in fifo order
+    // Try to assign containers to applications in fifo order 按照先进先出的原则,循环每一个应用
     for (Map.Entry<ApplicationId, SchedulerApplication<FiCaSchedulerApp>> e : applications
         .entrySet()) {
-      FiCaSchedulerApp application = e.getValue().getCurrentAppAttempt();
+      FiCaSchedulerApp application = e.getValue().getCurrentAppAttempt();//获取当前应用的尝试任务
       if (application == null) {
         continue;
       }
@@ -475,7 +484,7 @@ public class FifoScheduler extends
       application.showRequests();
       synchronized (application) {
         // Check if this resource is on the blacklist
-        if (SchedulerAppUtils.isBlacklisted(application, node, LOG)) {
+        if (SchedulerAppUtils.isBlacklisted(application, node, LOG)) {//该节点是否是该应用的黑名单
           continue;
         }
         
@@ -486,7 +495,7 @@ public class FifoScheduler extends
           // Ensure the application needs containers of this priority
           if (maxContainers > 0) {
             int assignedContainers = 
-              assignContainersOnNode(node, application, priority);
+              assignContainersOnNode(node, application, priority);//为该应用在该node上分配容器
             // Do not assign out of order w.r.t priorities
             if (assignedContainers == 0) {
               break;
@@ -500,7 +509,7 @@ public class FifoScheduler extends
 
       // Done
       if (Resources.lessThan(resourceCalculator, clusterResource,
-              node.getAvailableResource(), minimumAllocation)) {
+              node.getAvailableResource(), minimumAllocation)) {//如果资源不足了,则停止为该Node节点分配容器任务
         break;
       }
     }
@@ -650,6 +659,24 @@ public class FifoScheduler extends
     return assignedContainers;
   }
 
+  /**
+   * 
+   * @param node
+   * @param application
+   * @param priority
+   * @param assignableContainers 可以分配多少个容器
+   * @param request
+   * @param type
+   * @return
+   * 返回最终分配多少个容器
+   * 
+   * 目标创建N个容器(Container)--每一个容器已经制定好在什么节点上运行,以及每一个节点上需要的资源情况
+   * 1.计算最终可以分配多少个容器在该节点上
+   * 2.创建Container对象
+   * 3.RMContainer rmContainer = application.allocate(type, node, priority, request, container);让应用知道有该容器
+   * 4.node.allocateContainer(rmContainer);让节点知道有该容器
+   * 5.increaseUsedResources(rmContainer);增加已经使用的资源情况
+   */
   private int assignContainer(FiCaSchedulerNode node, FiCaSchedulerApp application, 
       Priority priority, int assignableContainers, 
       ResourceRequest request, NodeType type) {
@@ -659,8 +686,9 @@ public class FifoScheduler extends
         " priority=" + priority.getPriority() + 
         " assignableContainers=" + assignableContainers +
         " request=" + request + " type=" + type);
-    Resource capability = request.getCapability();
+    Resource capability = request.getCapability();//为每一个容器需要分配的资源情况
 
+    //从内存角度看该节点node还能容纳多少个容器
     int availableContainers = 
       node.getAvailableResource().getMemory() / capability.getMemory(); // TODO: A buggy
                                                                         // application
@@ -668,6 +696,7 @@ public class FifoScheduler extends
                                                                         // zero would
                                                                         // crash the
                                                                         // scheduler.
+    //获取真正可以分配多少个容器在该节点上
     int assignedContainers = 
       Math.min(assignableContainers, availableContainers);
 
@@ -675,10 +704,11 @@ public class FifoScheduler extends
       for (int i=0; i < assignedContainers; ++i) {
 
         NodeId nodeId = node.getRMNode().getNodeID();
+        //为该容器产生一个ID
         ContainerId containerId = BuilderUtils.newContainerId(application
             .getApplicationAttemptId(), application.getNewContainerId());
 
-        // Create the container
+        // Create the container 创建一个容器对象
         Container container =
             BuilderUtils.newContainer(containerId, nodeId, node.getRMNode()
               .getHttpAddress(), capability, priority, null);
@@ -692,7 +722,7 @@ public class FifoScheduler extends
         // Inform the node
         node.allocateContainer(rmContainer);
 
-        // Update usage for this container
+        // Update usage for this container 增加已经使用的资源情况
         increaseUsedResources(rmContainer);
       }
 
@@ -704,21 +734,25 @@ public class FifoScheduler extends
   private synchronized void nodeUpdate(RMNode rmNode) {
     FiCaSchedulerNode node = getNode(rmNode.getNodeID());
     
+    //获取所有的远程节点刚刚新启动的容器以及完成的容器
     List<UpdatedContainerInfo> containerInfoList = rmNode.pullContainerUpdates();
     
+    //新增加的容器
     List<ContainerStatus> newlyLaunchedContainers = new ArrayList<ContainerStatus>();
+    //已经完成的容器
     List<ContainerStatus> completedContainers = new ArrayList<ContainerStatus>();
     
     for(UpdatedContainerInfo containerInfo : containerInfoList) {
       newlyLaunchedContainers.addAll(containerInfo.getNewlyLaunchedContainers());
       completedContainers.addAll(containerInfo.getCompletedContainers());
     }
-    // Processing the newly launched containers
+    
+    // Processing the newly launched containers 处理新产生的容器
     for (ContainerStatus launchedContainer : newlyLaunchedContainers) {
       containerLaunchedOnNode(launchedContainer.getContainerId(), node);
     }
 
-    // Process completed containers
+    // Process completed containers 处理完成的容器
     for (ContainerStatus completedContainer : completedContainers) {
       ContainerId containerId = completedContainer.getContainerId();
       LOG.debug("Container FINISHED: " + containerId);
@@ -737,7 +771,7 @@ public class FifoScheduler extends
       LOG.debug("Node heartbeat " + rmNode.getNodeID() + 
           " available resource = " + node.getAvailableResource());
 
-      assignContainers(node);
+      assignContainers(node);//为该node节点分配容器
 
       LOG.debug("Node after allocation " + rmNode.getNodeID() + " resource = "
           + node.getAvailableResource());
@@ -746,6 +780,7 @@ public class FifoScheduler extends
     updateAvailableResourcesMetrics();
   }
 
+  //增加已经使用的资源情况
   private void increaseUsedResources(RMContainer rmContainer) {
     Resources.addTo(usedResource, rmContainer.getAllocatedResource());
   }
@@ -849,6 +884,11 @@ public class FifoScheduler extends
     }
   }
 
+  /**
+   * 容器完成了
+   * 1.通知app的尝试任务,说该容器执行完了
+   * 2.通知该容器对应的Node节点,要求该节点释放该资源
+   */
   @Lock(FifoScheduler.class)
   @Override
   protected synchronized void completedContainer(RMContainer rmContainer,
@@ -882,7 +922,7 @@ public class FifoScheduler extends
     // Inform the node
     node.releaseContainer(container);
     
-    // Update total usage
+    // Update total usage 已经使用的资源需要被减少一部分
     Resources.subtractFrom(usedResource, container.getResource());
 
     LOG.info("Application attempt " + application.getApplicationAttemptId() + 
@@ -894,6 +934,11 @@ public class FifoScheduler extends
   
   private Resource usedResource = recordFactory.newRecordInstance(Resource.class);
 
+  /**
+   * 1.停止该节点上所有的容器
+   * 2.移除该节点映射
+   * 3.对总资源减少一部分资源
+   */
   private synchronized void removeNode(RMNode nodeInfo) {
     FiCaSchedulerNode node = getNode(nodeInfo.getNodeID());
     if (node == null) {
@@ -926,6 +971,7 @@ public class FifoScheduler extends
     return DEFAULT_QUEUE.getQueueUserAclInfo(null); 
   }
 
+  //添加一个节点
   private synchronized void addNode(RMNode nodeManager) {
     this.nodes.put(nodeManager.getNodeID(), new FiCaSchedulerNode(nodeManager,
         usePortForNodeName));

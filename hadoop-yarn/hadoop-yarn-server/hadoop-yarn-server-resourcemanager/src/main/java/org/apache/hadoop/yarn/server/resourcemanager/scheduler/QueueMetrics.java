@@ -72,8 +72,8 @@ public class QueueMetrics implements MetricsSource {
   @Metric("# of reserved memory in MB") MutableGaugeInt reservedMB;
   @Metric("Reserved CPU in virtual cores") MutableGaugeInt reservedVCores;
   @Metric("# of reserved containers") MutableGaugeInt reservedContainers;
-  @Metric("# of active users") MutableGaugeInt activeUsers;
-  @Metric("# of active applications") MutableGaugeInt activeApplications;
+  @Metric("# of active users") MutableGaugeInt activeUsers;//当前集群中活跃用户数
+  @Metric("# of active applications") MutableGaugeInt activeApplications;//当前集群中活跃的应用数量
   private final MutableGaugeInt[] runningTime;
   private TimeBucketMetrics<ApplicationId> runBuckets;
 
@@ -89,6 +89,8 @@ public class QueueMetrics implements MetricsSource {
   final String queueName;
   final QueueMetrics parent;
   final MetricsSystem metricsSystem;
+  
+  //key是user,value是统计对象,即一个user对应一个统计对象
   private final Map<String, QueueMetrics> users;
   private final Configuration conf;
 
@@ -442,8 +444,8 @@ public class QueueMetrics implements MetricsSource {
   }
   
   public void activateApp(String user) {
-    activeApplications.incr();
-    QueueMetrics userMetrics = getUserMetrics(user);
+    activeApplications.incr();//当前集群中活跃的应用数量+1
+    QueueMetrics userMetrics = getUserMetrics(user);//获取该user对应的统计对象
     if (userMetrics != null) {
       userMetrics.activateApp(user);
     }

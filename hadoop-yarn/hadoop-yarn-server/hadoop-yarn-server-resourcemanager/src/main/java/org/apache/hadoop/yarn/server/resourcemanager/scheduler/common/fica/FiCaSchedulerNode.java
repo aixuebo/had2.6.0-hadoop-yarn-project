@@ -32,6 +32,9 @@ public class FiCaSchedulerNode extends SchedulerNode {
 
   private static final Log LOG = LogFactory.getLog(FiCaSchedulerNode.class);
 
+  /**
+   * @param usePortForNodeName true表示调度器上表示NodeManager节点的名称的时候,是否要加入端口号
+   */
   public FiCaSchedulerNode(RMNode node, boolean usePortForNodeName) {
     super(node, usePortForNodeName);
   }
@@ -44,11 +47,11 @@ public class FiCaSchedulerNode extends SchedulerNode {
   public synchronized void reserveResource(
       SchedulerApplicationAttempt application, Priority priority,
       RMContainer container) {
-    // Check if it's already reserved
-    RMContainer reservedContainer = getReservedContainer();
+    // Check if it's already reserved 检查是否需要预留操作
+    RMContainer reservedContainer = getReservedContainer();//获取预留的容器
     if (reservedContainer != null) {//如果该节点的域名容器位置不是null,说明已经被占用
-      // Sanity check
-      if (!container.getContainer().getNodeId().equals(getNodeID())) {
+      // Sanity check 明智的检查
+      if (!container.getContainer().getNodeId().equals(getNodeID())) {//等待储备的容器节点与当前节点不一致情况下
         throw new IllegalStateException("Trying to reserve" +
             " container " + container +
             " on node " + container.getReservedNode() + 
@@ -68,13 +71,15 @@ public class FiCaSchedulerNode extends SchedulerNode {
             " on node " + this);
       }
 
+      //可以为同一个应用在该节点上更新预留容器
       if (LOG.isDebugEnabled()) {
         LOG.debug("Updated reserved container "
             + container.getContainer().getId() + " on node " + this
             + " for application attempt "
             + application.getApplicationAttemptId());
       }
-    } else {
+    } else {//因为是null,说明该节点目前没有设置储备容器
+      //打印日志,说要在该节点上储备该容器
       if (LOG.isDebugEnabled()) {
         LOG.debug("Reserved container "
             + container.getContainer().getId() + " on node " + this
@@ -82,7 +87,7 @@ public class FiCaSchedulerNode extends SchedulerNode {
             + application.getApplicationAttemptId());
       }
     }
-    //真正的分配预留容器
+    //真正的分配预留容器,即在该节点上设置要储备的容器
     setReservedContainer(container);
   }
 
@@ -94,6 +99,9 @@ public class FiCaSchedulerNode extends SchedulerNode {
       SchedulerApplicationAttempt application) {
 
     // adding NP checks as this can now be called for preemption
+	  /**
+	   * 校验要取消的应用,与存在的预保留的容器所在应用是否相同,如果不相同,抛异常,是不允许取消的
+	   */
     if (getReservedContainer() != null
         && getReservedContainer().getContainer() != null
         && getReservedContainer().getContainer().getId() != null

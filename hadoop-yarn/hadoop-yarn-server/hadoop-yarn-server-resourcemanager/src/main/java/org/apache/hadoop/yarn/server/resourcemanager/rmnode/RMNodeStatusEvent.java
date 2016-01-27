@@ -26,11 +26,14 @@ import org.apache.hadoop.yarn.api.records.NodeId;
 import org.apache.hadoop.yarn.server.api.protocolrecords.NodeHeartbeatResponse;
 import org.apache.hadoop.yarn.server.api.records.NodeHealthStatus;
 
+/**
+ * 更新节点的状态信息事件
+ */
 public class RMNodeStatusEvent extends RMNodeEvent {
 
-  private final NodeHealthStatus nodeHealthStatus;
+  private final NodeHealthStatus nodeHealthStatus;//记录上一次该远程节点的健康检查统计信息
   private final List<ContainerStatus> containersCollection;
-  private final NodeHeartbeatResponse latestResponse;
+  private final NodeHeartbeatResponse latestResponse;//针对该节点的心跳回复统计信息
   private final List<ApplicationId> keepAliveAppIds;
 
   public RMNodeStatusEvent(NodeId nodeId, NodeHealthStatus nodeHealthStatus,

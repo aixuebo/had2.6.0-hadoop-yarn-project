@@ -195,6 +195,13 @@ public class SchedulerUtils {
    * 
    * @throws <code>InvalidResourceRequestException</code> when there is invalid
    *         request
+   * 校验资源请求   
+   * @param resReq
+   * @param maximumResource
+   * @param queueName
+   * @param scheduler
+   * 1.请求需要的资源不允许超过集群为每一个资源申请的最大资源数,包含CPU和内存
+   * 2.如果队列名称所对应的队列有lable属性,而本身资源没有该属性,则将队列的label赋予资源本身
    */
   public static void validateResourceRequest(ResourceRequest resReq,
       Resource maximumResource, String queueName, YarnScheduler scheduler)

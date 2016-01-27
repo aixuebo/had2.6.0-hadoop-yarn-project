@@ -49,7 +49,7 @@ import org.apache.hadoop.yarn.state.StateMachineFactory;
 /**
  * Datum representing a localized resource. Holds the statemachine of a
  * resource. State of the resource is one of {@link ResourceState}.
- * 本地资源
+ * 一个资源请求LocalResourceRequest,对应一个该对象,表示本地真实的一个资源信息
  */
 public class LocalizedResource implements EventHandler<ResourceEvent> {
 
@@ -58,11 +58,12 @@ public class LocalizedResource implements EventHandler<ResourceEvent> {
   volatile Path localPath;//本地存储路径
   volatile long size = -1;//下载的文件大小
   final LocalResourceRequest rsrc;//待要下载的资源
+  
   final Dispatcher dispatcher;
   final StateMachine<ResourceState,ResourceEventType,ResourceEvent> stateMachine;
   final Semaphore sem = new Semaphore(1);
   final Queue<ContainerId> ref; // Queue of containers using this localized
-                                // resource
+                                // resource该资源被多少个容器引用需要
   private final Lock readLock;
   private final Lock writeLock;
 
@@ -217,6 +218,7 @@ public class LocalizedResource implements EventHandler<ResourceEvent> {
    * Transition from INIT to DOWNLOADING.
    * Sends a {@link LocalizerResourceRequestEvent} to the
    * {@link ResourceLocalizationService}.
+   * 资源请求来了,执行该函数,状态改成DOWNLOADING
    */
   @SuppressWarnings("unchecked") // dispatcher not typed
   private static class FetchResourceTransition extends ResourceTransition {
@@ -225,7 +227,7 @@ public class LocalizedResource implements EventHandler<ResourceEvent> {
       ResourceRequestEvent req = (ResourceRequestEvent) event;
       LocalizerContext ctxt = req.getContext();
       ContainerId container = ctxt.getContainerId();
-      rsrc.ref.add(container);
+      rsrc.ref.add(container);//该资源被多少个容器引用需要
       rsrc.dispatcher.getEventHandler().handle(
           new LocalizerResourceRequestEvent(rsrc, req.getVisibility(), ctxt, 
               req.getLocalResourceRequest().getPattern()));
@@ -243,7 +245,7 @@ public class LocalizedResource implements EventHandler<ResourceEvent> {
       ResourceLocalizedEvent locEvent = (ResourceLocalizedEvent) event;
       rsrc.localPath = Path.getPathWithoutSchemeAndAuthority(locEvent.getLocation());
       rsrc.size = locEvent.getSize();
-      for (ContainerId container : rsrc.ref) {
+      for (ContainerId container : rsrc.ref) {//对每一个容器发送该事件,表示资源已经下载完成
         rsrc.dispatcher.getEventHandler().handle(new ContainerResourceLocalizedEvent(container, rsrc.rsrc, rsrc.localPath));
       }
     }
@@ -251,6 +253,7 @@ public class LocalizedResource implements EventHandler<ResourceEvent> {
 
   /**
    * Resource localization failed, notify waiting containers.
+   * 下载资源失败
    */
   @SuppressWarnings("unchecked")
   private static class FetchFailedTransition extends ResourceTransition {
@@ -268,6 +271,7 @@ public class LocalizedResource implements EventHandler<ResourceEvent> {
 
   /**
    * Resource already localized, notify immediately.
+   * 资源已经完成下载了,又接收到request,则什么也不做
    */
   @SuppressWarnings("unchecked") // dispatcher not typed
   private static class LocalizedResourceTransition
@@ -286,6 +290,7 @@ public class LocalizedResource implements EventHandler<ResourceEvent> {
 
   /**
    * Decrement resource count, update timestamp.
+   * 释放一个资源
    */
   private static class ReleaseTransition extends ResourceTransition {
     @Override

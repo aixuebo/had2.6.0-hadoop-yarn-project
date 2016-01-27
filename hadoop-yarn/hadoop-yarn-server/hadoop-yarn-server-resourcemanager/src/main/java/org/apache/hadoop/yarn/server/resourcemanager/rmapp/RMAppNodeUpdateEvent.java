@@ -21,6 +21,9 @@ package org.apache.hadoop.yarn.server.resourcemanager.rmapp;
 import org.apache.hadoop.yarn.api.records.ApplicationId;
 import org.apache.hadoop.yarn.server.resourcemanager.rmnode.RMNode;
 
+/**
+ * 由于node节点已经可以使用了,则通知该appId在node上可以继续了
+ */
 public class RMAppNodeUpdateEvent extends RMAppEvent {
 
   public enum RMAppNodeUpdateType {

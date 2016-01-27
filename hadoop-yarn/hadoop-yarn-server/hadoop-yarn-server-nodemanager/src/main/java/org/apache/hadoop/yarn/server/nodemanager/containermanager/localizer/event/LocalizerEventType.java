@@ -19,5 +19,5 @@ package org.apache.hadoop.yarn.server.nodemanager.containermanager.localizer.eve
 
 public enum LocalizerEventType {
   /** See {@link LocalizerResourceRequestEvent} */
-  REQUEST_RESOURCE_LOCALIZATION
+  REQUEST_RESOURCE_LOCALIZATION//本地化资源管理器初始化资源请求
 }

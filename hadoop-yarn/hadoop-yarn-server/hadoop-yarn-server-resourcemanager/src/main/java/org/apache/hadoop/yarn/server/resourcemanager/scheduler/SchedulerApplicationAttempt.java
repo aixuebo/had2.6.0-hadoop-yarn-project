@@ -64,7 +64,8 @@ import com.google.common.collect.Multiset;
  * Represents an application attempt from the viewpoint of the scheduler.
  * Each running app attempt in the RM corresponds to one instance
  * of this class.
- * 表示尝试的真正执行的任务
+ * 在调度器的视图角度下.该类表示一个应用的尝试任务
+ * 每一个运行的app尝试任务,在ResourceManager下都拥有一个该实力
  */
 @Private
 @Unstable
@@ -77,7 +78,7 @@ public class SchedulerApplicationAttempt {
   private long lastMemorySeconds = 0;
   private long lastVcoreSeconds = 0;
 
-  protected final AppSchedulingInfo appSchedulingInfo;
+  protected final AppSchedulingInfo appSchedulingInfo;//对该应用的全局信息
   
   protected Map<ContainerId, RMContainer> liveContainers = new HashMap<ContainerId, RMContainer>();
   protected final Map<Priority, Map<NodeId, RMContainer>> reservedContainers = new HashMap<Priority, Map<NodeId, RMContainer>>(); 
@@ -93,6 +94,7 @@ public class SchedulerApplicationAttempt {
   private boolean amRunning = false;
   private LogAggregationContext logAggregationContext;
 
+  //该资源调度器上为该app分配的容器,这些容器还没有真正分配到AM上,暂时仅仅存在在调度器中
   protected List<RMContainer> newlyAllocatedContainers = new ArrayList<RMContainer>(); 
 
   // This pendingRelease is used in work-preserving recovery scenario to keep
@@ -130,6 +132,7 @@ public class SchedulerApplicationAttempt {
     this.queue = queue;
     this.pendingRelease = new HashSet<ContainerId>();
     if (rmContext.getRMApps() != null && rmContext.getRMApps().containsKey(applicationAttemptId.getApplicationId())) {
+      //应用提交的上下文，基本上都是job设置的参数
       ApplicationSubmissionContext appSubmissionContext = rmContext.getRMApps().get(applicationAttemptId.getApplicationId()).getApplicationSubmissionContext();
       if (appSubmissionContext != null) {
         unmanagedAM = appSubmissionContext.getUnmanagedAM();
@@ -369,6 +372,9 @@ public class SchedulerApplicationAttempt {
     return (reservedContainers == null) ? 0 : reservedContainers.size();
   }
   
+  /**
+   * 通知该容器已经在该Node上启动了
+   */
   @SuppressWarnings("unchecked")
   public synchronized void containerLaunchedOnNode(ContainerId containerId,
       NodeId nodeId) {
@@ -429,6 +435,7 @@ public class SchedulerApplicationAttempt {
   // Create container token and NMToken altogether, if either of them fails for
   // some reason like DNS unavailable, do not return this container and keep it
   // in the newlyAllocatedContainers waiting to be refetched.
+  //从调度器中已经为该应用分配的容器,将这些容器发送给AM
   public synchronized ContainersAndNMTokensAllocation
       pullNewlyAllocatedContainersAndNMTokens() {
     List<Container> returnContainerList =

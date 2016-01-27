@@ -153,9 +153,12 @@ public abstract class AbstractYarnScheduler
     return maximumAllocation;
   }
 
+  /**
+   * 容器已经在该Node上执行了
+   */
   protected void containerLaunchedOnNode(ContainerId containerId,
                                          SchedulerNode node) {
-    // Get the application for the finished container
+    // Get the application for the finished container  通过容器获取该容器对应的调度任务
     SchedulerApplicationAttempt application = getCurrentAttemptForContainer
         (containerId);
     if (application == null) {
@@ -450,6 +453,7 @@ public abstract class AbstractYarnScheduler
   protected abstract void completedContainer(RMContainer rmContainer,
       ContainerStatus containerStatus, RMContainerEventType event);
 
+  //释放该应用上的这些容器
   protected void releaseContainers(List<ContainerId> containers,
       SchedulerApplicationAttempt attempt) {
     for (ContainerId containerId : containers) {
@@ -470,6 +474,8 @@ public abstract class AbstractYarnScheduler
             attempt.getApplicationId(), containerId);
         }
       }
+      
+      //使该容器结束
       completedContainer(rmContainer,
         SchedulerUtils.createAbnormalContainerStatus(containerId,
           SchedulerUtils.RELEASED_CONTAINER), RMContainerEventType.RELEASED);

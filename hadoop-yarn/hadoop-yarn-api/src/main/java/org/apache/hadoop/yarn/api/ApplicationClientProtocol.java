@@ -91,7 +91,7 @@ import org.apache.hadoop.yarn.exceptions.YarnException;
  * <p>The protocol between clients and the <code>ResourceManager</code>
  * to submit/abort jobs and to get information on applications, cluster metrics,
  * nodes, queues and ACLs.</p>
- * 客户端协议 ,提交、查询应用信息以及集群信息
+ * 客户端与ResourceManager之间的协议 ,提交、终止、查询应用信息以及集群信息
  */
 @Public
 @Stable

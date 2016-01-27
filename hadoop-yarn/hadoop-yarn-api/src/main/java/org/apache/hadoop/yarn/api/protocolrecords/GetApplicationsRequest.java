@@ -36,7 +36,7 @@ import org.apache.hadoop.yarn.util.Records;
  *
  *
  * @see ApplicationClientProtocol#getApplications(GetApplicationsRequest)
- * 获取一群应用的请求
+ * 获取一群应用的请求,查找满足请求条件的app集合的报告
  */
 @Public
 @Stable
@@ -76,15 +76,15 @@ public abstract class GetApplicationsRequest {
   @Public
   @Stable
   public static GetApplicationsRequest newInstance(
-      ApplicationsRequestScope scope,
-      Set<String> users,
-      Set<String> queues,
-      Set<String> applicationTypes,
-      Set<String> applicationTags,
-      EnumSet<YarnApplicationState> applicationStates,
-      LongRange startRange,
-      LongRange finishRange,
-      Long limit) {
+      ApplicationsRequestScope scope,//通过app的权限过滤,是否允许要查看该app权限
+      Set<String> users,//app的user必须在users中
+      Set<String> queues,//仅仅获取与该队列相关的app集合
+      Set<String> applicationTypes,//必须满足application.getApplicationType()这个值在请求的applicationTypes中存在的app,该值默认是yarn
+      Set<String> applicationTags,//application.getApplicationTags()必须有一个在参数applicationTags中
+      EnumSet<YarnApplicationState> applicationStates,//application.createApplicationState()必须满足applicationStates
+      LongRange startRange,//application.getStartTime()开始时间必须是startRange之间的,即startRange.min < application.getStartTime() <startRange.max
+      LongRange finishRange,//application.getFinishTime()开始时间必须是finishRange之间的,即startRafinishRangenge.min < application.getFinishTime() <finishRange.max
+      Long limit) {//请求要获取app的上限,到达该上限后,不再获取app了
     GetApplicationsRequest request =
         Records.newRecord(GetApplicationsRequest.class);
     if (scope != null) {
@@ -265,6 +265,7 @@ public abstract class GetApplicationsRequest {
    * Get the queues to filter applications on
    *
    * @return set of queues to filter applications on
+   * 如果该值不是null,则仅仅获取与该队列集合下的app
    */
   @Private
   @Unstable
@@ -274,6 +275,7 @@ public abstract class GetApplicationsRequest {
    * Set the queue to filter applications on
    *
    * @param queue user to filter applications on
+   * 如果该值不是null,则仅仅获取与该队列集合下的app
    */
   @Private
   @Unstable
@@ -283,6 +285,7 @@ public abstract class GetApplicationsRequest {
    * Get the limit on the number applications to return
    *
    * @return number of applications to limit to
+   * 请求要获取app的上限,到达该上限后,不再获取app了
    */
   @Private
   @Unstable
@@ -292,6 +295,7 @@ public abstract class GetApplicationsRequest {
    * Limit the number applications to return
    *
    * @param limit number of applications to limit to
+   * 请求要获取app的上限,到达该上限后,不再获取app了
    */
   @Private
   @Unstable

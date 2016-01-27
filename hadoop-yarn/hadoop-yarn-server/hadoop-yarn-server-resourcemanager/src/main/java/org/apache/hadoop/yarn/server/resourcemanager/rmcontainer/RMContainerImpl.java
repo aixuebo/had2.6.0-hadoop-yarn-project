@@ -162,7 +162,7 @@ public class RMContainerImpl implements RMContainer {
   private long finishTime;
   private ContainerStatus finishedStatus;
   private boolean isAMContainer;
-  private List<ResourceRequest> resourceRequests;
+  private List<ResourceRequest> resourceRequests;//该容器要执行的资源集合,该资源分别分配在本地节点、rack节点、任意节点上
 
   public RMContainerImpl(Container container,
       ApplicationAttemptId appAttemptId, NodeId nodeId, String user,
