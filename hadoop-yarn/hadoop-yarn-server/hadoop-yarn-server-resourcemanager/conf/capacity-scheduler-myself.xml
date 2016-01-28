@@ -1,0 +1,44 @@
+
+<configuration>
+  <property>
+    <name></name>
+    <value></value>
+  </property>
+</configuration>
+
+全部标签
+
+属于每一个队列的标签
+yarn.scheduler.capacity.$queue.reservable
+yarn.scheduler.capacity.$queue.reservation-window
+yarn.scheduler.capacity.$queue.reservation-policy
+yarn.scheduler.capacity.$queue.reservation-agent
+yarn.scheduler.capacity.$queue.reservation-planner
+yarn.scheduler.capacity.$queue.reservation-move-on-expiry
+yarn.scheduler.capacity.$queue.reservation-enforcement-window
+yarn.scheduler.capacity.$queue.instantaneous-max-capacity
+yarn.scheduler.capacity.$queue.acl_$xxxx
+yarn.scheduler.capacity.$queue.average-capacity
+yarn.scheduler.capacity.$queue.accessible-node-labels
+yarn.scheduler.capacity.$queue.accessible-node-labels.label.capacity
+yarn.scheduler.capacity.$queue.accessible-node-labels.label.maximum-capacity
+yarn.scheduler.capacity.$queue.default-node-label-expression
+yarn.scheduler.capacity.$queue.queues
+yarn.scheduler.capacity.$queue.maximum-applications
+yarn.scheduler.capacity.$queue.maximum-am-resource-percent
+yarn.scheduler.capacity.$queue.maximum-capacity
+yarn.scheduler.capacity.$queue.minimum-user-limit-percent
+yarn.scheduler.capacity.$queue.capacity
+yarn.scheduler.capacity.$queue.user-limit-factor
+yarn.scheduler.capacity.$queue.state
+yarn.scheduler.capacity.$queue.show-reservations-as-queues
+
+全局标签
+yarn.scheduler.capacity.maximum-am-resource-percent
+yarn.scheduler.capacity.maximum-applications
+yarn.scheduler.capacity.user-metrics.enable
+yarn.scheduler.capacity.node-locality-delay
+yarn.scheduler.capacity.resource-calculator
+yarn.scheduler.capacity.schedule-asynchronously.enable
+yarn.scheduler.capacity.queue-mappings-override.enable
+yarn.scheduler.capacity.queue-mappings
