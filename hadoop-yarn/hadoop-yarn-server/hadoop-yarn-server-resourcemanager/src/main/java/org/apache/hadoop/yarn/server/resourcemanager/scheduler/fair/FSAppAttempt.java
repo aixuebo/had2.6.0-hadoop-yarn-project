@@ -58,6 +58,7 @@ import org.apache.hadoop.yarn.util.resource.Resources;
 
 /**
  * Represents an application attempt from the viewpoint of the Fair Scheduler.
+ * 从公平队列调度器的角度 观看一个app尝试任务
  */
 @Private
 @Unstable
@@ -71,7 +72,7 @@ public class FSAppAttempt extends SchedulerApplicationAttempt
   private long startTime;
   private Priority priority;
   private ResourceWeights resourceWeights;
-  private Resource demand = Resources.createResource(0);
+  private Resource demand = Resources.createResource(0);//该app尝试任务满足目前所有任务的资源
   private FairScheduler scheduler;
   private Resource fairShare = Resources.createResource(0, 0);
   private Resource preemptedResources = Resources.createResource(0);
@@ -88,8 +89,7 @@ public class FSAppAttempt extends SchedulerApplicationAttempt
    * at the current allowed level and the time since the last container
    * was scheduled. Currently we use only the former.
    */
-  private final Map<Priority, NodeType> allowedLocalityLevel =
-      new HashMap<Priority, NodeType>();
+  private final Map<Priority, NodeType> allowedLocalityLevel = new HashMap<Priority, NodeType>();
 
   public FSAppAttempt(FairScheduler scheduler,
       ApplicationAttemptId applicationAttemptId, String user, FSLeafQueue queue,
@@ -756,8 +756,8 @@ public class FSAppAttempt extends SchedulerApplicationAttempt
     // Add up outstanding resource requests
     synchronized (this) {
       for (Priority p : getPriorities()) {
-        for (ResourceRequest r : getResourceRequests(p).values()) {
-          Resource total = Resources.multiply(r.getCapability(), r.getNumContainers());
+        for (ResourceRequest r : getResourceRequests(p).values()) {//获取该优先级下所有的资源
+          Resource total = Resources.multiply(r.getCapability(), r.getNumContainers());//每一个容器需要的资源*多少个容器,即所以容器需要的资源
           Resources.addTo(demand, total);
         }
       }

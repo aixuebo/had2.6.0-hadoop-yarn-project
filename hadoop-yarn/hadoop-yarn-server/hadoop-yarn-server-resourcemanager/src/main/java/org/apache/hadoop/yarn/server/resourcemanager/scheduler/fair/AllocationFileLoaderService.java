@@ -53,6 +53,10 @@ import org.xml.sax.SAXException;
 
 import com.google.common.annotations.VisibleForTesting;
 
+/**
+ * 该类的意义就是定期的加载fair-scheduler.xml配置文件
+ * 参见fair-scheduler-myself.xml我自己写的总结,配置信息是最全的
+ */
 @Public
 @Unstable
 public class AllocationFileLoaderService extends AbstractService {
@@ -60,9 +64,6 @@ public class AllocationFileLoaderService extends AbstractService {
   public static final Log LOG = LogFactory.getLog(
       AllocationFileLoaderService.class.getName());
   
-  /** Time to wait between checks of the allocation file */
-  public static final long ALLOC_RELOAD_INTERVAL_MS = 10 * 1000;
-
   /**
    * Time to wait after the allocation has been modified before reloading it
    * (this is done to prevent loading a file that hasn't been fully written).
@@ -73,18 +74,19 @@ public class AllocationFileLoaderService extends AbstractService {
 
   private final Clock clock;
 
-  private long lastSuccessfulReload; // Last time we successfully reloaded queues
-  private boolean lastReloadAttemptFailed = false;
-  
-  // Path to XML file containing allocations. 
-  private File allocFile;
-  
   private Listener reloadListener;
   
+  // Path to XML file containing allocations. 
+  private File allocFile;//fair-scheduler.xml配置文件的位置
+  private Thread reloadThread;//读取fair-scheduler.xml配置文件的线程
   @VisibleForTesting
-  long reloadIntervalMs = ALLOC_RELOAD_INTERVAL_MS;
+  long reloadIntervalMs = ALLOC_RELOAD_INTERVAL_MS;//每次读取配置文件的休息时间
+  /** Time to wait between checks of the allocation file */
+  public static final long ALLOC_RELOAD_INTERVAL_MS = 10 * 1000;
   
-  private Thread reloadThread;
+  private long lastSuccessfulReload; // Last time we successfully reloaded queues 表示上次成功加载配置文件的时间戳
+  private boolean lastReloadAttemptFailed = false;//true表示上次加载配置文件出错了
+  
   private volatile boolean running = true;
   
   public AllocationFileLoaderService() {
@@ -99,7 +101,7 @@ public class AllocationFileLoaderService extends AbstractService {
   
   @Override
   public void serviceInit(Configuration conf) throws Exception {
-    this.allocFile = getAllocationFile(conf);
+    this.allocFile = getAllocationFile(conf);//获取fair-scheduler.xml配置文件
     if (allocFile != null) {
       reloadThread = new Thread() {
         @Override
@@ -108,15 +110,15 @@ public class AllocationFileLoaderService extends AbstractService {
             long time = clock.getTime();
             long lastModified = allocFile.lastModified();
             if (lastModified > lastSuccessfulReload &&
-                time > lastModified + ALLOC_RELOAD_WAIT_MS) {
+                time > lastModified + ALLOC_RELOAD_WAIT_MS) {//说明配置文件修改了
               try {
-                reloadAllocations();
+                reloadAllocations();//重新加载该配置文件
               } catch (Exception ex) {
                 if (!lastReloadAttemptFailed) {
                   LOG.error("Failed to reload fair scheduler config file - " +
                       "will use existing allocations.", ex);
                 }
-                lastReloadAttemptFailed = true;
+                lastReloadAttemptFailed = true;//说明加载配置文件出错了
               }
             } else if (lastModified == 0l) {
               if (!lastReloadAttemptFailed) {
@@ -124,7 +126,7 @@ public class AllocationFileLoaderService extends AbstractService {
                     " last modified returned 0. File exists: "
                     + allocFile.exists());
               }
-              lastReloadAttemptFailed = true;
+              lastReloadAttemptFailed = true;//说明加载配置文件出错了
             }
             try {
               Thread.sleep(reloadIntervalMs);
@@ -167,8 +169,10 @@ public class AllocationFileLoaderService extends AbstractService {
    * Path to XML file containing allocations. If the
    * path is relative, it is searched for in the
    * classpath, but loaded like a regular File.
+   * 获取fair-scheduler.xml配置文件
    */
   public File getAllocationFile(Configuration conf) {
+	//配置文件的位置配置以及默认值,即fair-scheduler.xml
     String allocFilePath = conf.get(FairSchedulerConfiguration.ALLOCATION_FILE,
         FairSchedulerConfiguration.DEFAULT_ALLOCATION_FILE);
     File allocFile = new File(allocFilePath);
@@ -200,6 +204,7 @@ public class AllocationFileLoaderService extends AbstractService {
    * @throws AllocationConfigurationException if allocations are invalid.
    * @throws ParserConfigurationException if XML parser is misconfigured.
    * @throws SAXException if config file is malformed.
+   * 重新加载该配置文件
    */
   public synchronized void reloadAllocations() throws IOException,
       ParserConfigurationException, SAXException, AllocationConfigurationException {
@@ -212,49 +217,52 @@ public class AllocationFileLoaderService extends AbstractService {
     Map<String, Resource> minQueueResources = new HashMap<String, Resource>();
     Map<String, Resource> maxQueueResources = new HashMap<String, Resource>();
     Map<String, Integer> queueMaxApps = new HashMap<String, Integer>();
-    Map<String, Integer> userMaxApps = new HashMap<String, Integer>();
     Map<String, Float> queueMaxAMShares = new HashMap<String, Float>();
     Map<String, ResourceWeights> queueWeights = new HashMap<String, ResourceWeights>();
     Map<String, SchedulingPolicy> queuePolicies = new HashMap<String, SchedulingPolicy>();
     Map<String, Long> minSharePreemptionTimeouts = new HashMap<String, Long>();
     Map<String, Long> fairSharePreemptionTimeouts = new HashMap<String, Long>();
-    Map<String, Float> fairSharePreemptionThresholds =
-        new HashMap<String, Float>();
-    Map<String, Map<QueueACL, AccessControlList>> queueAcls =
-        new HashMap<String, Map<QueueACL, AccessControlList>>();
-    int userMaxAppsDefault = Integer.MAX_VALUE;
-    int queueMaxAppsDefault = Integer.MAX_VALUE;
-    float queueMaxAMShareDefault = 0.5f;
-    long defaultFairSharePreemptionTimeout = Long.MAX_VALUE;
-    long defaultMinSharePreemptionTimeout = Long.MAX_VALUE;
-    float defaultFairSharePreemptionThreshold = 0.5f;
-    SchedulingPolicy defaultSchedPolicy = SchedulingPolicy.DEFAULT_POLICY;
-
+    Map<String, Float> fairSharePreemptionThresholds = new HashMap<String, Float>();
+    Map<String, Map<QueueACL, AccessControlList>> queueAcls = new HashMap<String, Map<QueueACL, AccessControlList>>();
+    
+    //------解析标签内容------------------
+    List<Element> queueElements = new ArrayList<Element>();//对应queue或者pool标签
+    //对应user-maxRunningApps标签,key是user,value是maxRunningApps标签对应的值
+    Map<String, Integer> userMaxApps = new HashMap<String, Integer>();
+    int userMaxAppsDefault = Integer.MAX_VALUE;//对应userMaxAppsDefault标签
+    long defaultFairSharePreemptionTimeout = Long.MAX_VALUE;//对应defaultFairSharePreemptionTimeout标签
+    long defaultMinSharePreemptionTimeout = Long.MAX_VALUE;//对应defaultMinSharePreemptionTimeout标签
+    float defaultFairSharePreemptionThreshold = 0.5f;//对应defaultFairSharePreemptionThreshold标签
+    int queueMaxAppsDefault = Integer.MAX_VALUE;//对应queueMaxAppsDefault标签
+    float queueMaxAMShareDefault = 0.5f;//对应queueMaxAMShareDefault标签
+    SchedulingPolicy defaultSchedPolicy = SchedulingPolicy.DEFAULT_POLICY;//对应defaultQueueSchedulingPolicy或者defaultQueueSchedulingMode标签
+    Element placementPolicyElement = null;//对应queuePlacementPolicy标签    
+    
     QueuePlacementPolicy newPlacementPolicy = null;
 
     // Remember all queue names so we can display them on web UI, etc.
     // configuredQueues is segregated based on whether it is a leaf queue
     // or a parent queue. This information is used for creating queues
     // and also for making queue placement decisions(QueuePlacementRule.java).
-    Map<FSQueueType, Set<String>> configuredQueues =
-        new HashMap<FSQueueType, Set<String>>();
+    Map<FSQueueType, Set<String>> configuredQueues = new HashMap<FSQueueType, Set<String>>();
     for (FSQueueType queueType : FSQueueType.values()) {
       configuredQueues.put(queueType, new HashSet<String>());
     }
 
     // Read and parse the allocations file.
-    DocumentBuilderFactory docBuilderFactory =
-      DocumentBuilderFactory.newInstance();
+    DocumentBuilderFactory docBuilderFactory = DocumentBuilderFactory.newInstance();
     docBuilderFactory.setIgnoringComments(true);
     DocumentBuilder builder = docBuilderFactory.newDocumentBuilder();
     Document doc = builder.parse(allocFile);
     Element root = doc.getDocumentElement();
+    /**
+     * 配置文件的根一定是allocations
+     */
     if (!"allocations".equals(root.getTagName()))
       throw new AllocationConfigurationException("Bad fair scheduler config " +
           "file: top-level element not <allocations>");
-    NodeList elements = root.getChildNodes();
-    List<Element> queueElements = new ArrayList<Element>();
-    Element placementPolicyElement = null;
+    NodeList elements = root.getChildNodes();//所有根目录下的子节点
+    //循环每一个子节点
     for (int i = 0; i < elements.getLength(); i++) {
       Node node = elements.item(i);
       if (node instanceof Element) {
@@ -467,7 +475,7 @@ public class AllocationFileLoaderService extends AbstractService {
     }
     if (isLeaf) {
       // if a leaf in the alloc file is marked as type='parent'
-      // then store it under 'parent'
+      // then store it under 'parent'如果是叶子节点,但是标签存储了type='parent',则也将叶子节点标志位父节点
       if ("parent".equals(element.getAttribute("type"))) {
         configuredQueues.get(FSQueueType.PARENT).add(queueName);
       } else {
@@ -487,6 +495,7 @@ public class AllocationFileLoaderService extends AbstractService {
     }
   }
   
+  //当fair-scheduler.xml配置文件重新读取后,则调用该方法
   public interface Listener {
     public void onReload(AllocationConfiguration info);
   }

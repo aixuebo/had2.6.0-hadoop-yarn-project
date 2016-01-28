@@ -50,6 +50,11 @@ import org.apache.log4j.spi.LoggingEvent;
  * Constructing this class creates a disabled log. It must be initialized
  * using {@link FairSchedulerEventLog#init(Configuration, String)} to begin
  * writing to the file.
+ * 打印事件的到日志文件中
+ * 默认日志文件:
+ * {hadoop.log.dir}/fairscheduler/$username-fairscheduler.log
+ * 日志的内容是DATE    EVENT_TYPE   PARAM_1   PARAM_2   ...
+ * 该日志的目的是机器自己用于读取该日志信息
  */
 @Private
 @Unstable
@@ -62,6 +67,7 @@ class FairSchedulerEventLog {
   /**
    * Log directory, set by mapred.fairscheduler.eventlog.location in conf file;
    * defaults to {hadoop.log.dir}/fairscheduler.
+   * 默认是{hadoop.log.dir}/fairscheduler.
    */
   private String logDir;
 
@@ -78,13 +84,15 @@ class FairSchedulerEventLog {
     if (conf.isEventLogEnabled()) {
       try {
         logDir = conf.getEventlogDir();
-        File logDirFile = new File(logDir);
+        File logDirFile = new File(logDir);//创建事件日志目录
         if (!logDirFile.exists()) {
           if (!logDirFile.mkdirs()) {
             throw new IOException(
                 "Mkdirs failed to create " + logDirFile.toString());
           }
         }
+        
+        //创建以下日志文件$logDir/$username-fairscheduler.log
         String username = System.getProperty("user.name");
         logFile = String.format("%s%shadoop-%s-fairscheduler.log",
             logDir, File.separator, username);
@@ -109,6 +117,7 @@ class FairSchedulerEventLog {
    * <pre>
    * DATE    EVENT_TYPE   PARAM_1   PARAM_2   ...
    * </pre>
+   * 打印日志格式是EVENT_TYPE   PARAM_1   PARAM_2   ...
    */
   synchronized void log(String eventType, Object... params) {
     try {

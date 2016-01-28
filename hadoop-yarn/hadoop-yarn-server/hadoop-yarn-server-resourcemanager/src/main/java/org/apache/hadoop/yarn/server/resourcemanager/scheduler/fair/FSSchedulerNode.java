@@ -41,6 +41,9 @@ public class FSSchedulerNode extends SchedulerNode {
     super(node, usePortForNodeName);
   }
 
+  /**
+   * 在该Node上预留该application的尝试任务,预留容器对象
+   */
   @Override
   public synchronized void reserveResource(
       SchedulerApplicationAttempt application, Priority priority,
@@ -79,6 +82,9 @@ public class FSSchedulerNode extends SchedulerNode {
     this.reservedAppSchedulable = (FSAppAttempt) application;
   }
 
+  /**
+   * 在该Node上取消该应用对应的容器预留位置
+   */
   @Override
   public synchronized void unreserveResource(
       SchedulerApplicationAttempt application) {

@@ -62,6 +62,7 @@ public class FairSharePolicy extends SchedulingPolicy {
    * Schedulables above their min share are compared by (runningTasks / weight).
    * If all weights are equal, slots are given to the job with the fewest tasks;
    * otherwise, jobs with more weight get proportionally more slots.
+   * 针对调度器的排序规则
    */
   private static class FairShareComparator implements Comparator<Schedulable>,
       Serializable {

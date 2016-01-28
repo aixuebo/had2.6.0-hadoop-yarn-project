@@ -1,15 +1,32 @@
 
 <configuration>
   <property>
-    <name></name>
-    <value></value>
+    <name>yarn.scheduler.capacity.$queue.queues</name>
+    <value>queue1,queue12</value>
+    <description>
+      	描述该队列的所有子队列名称集合
+    </description>
+    
+    <name>yarn.scheduler.capacity.$queue.reservable</name>
+    <value>true</value>
+    <description>
+      	该队列是否支持预约
+    </description>
+    
   </property>
 </configuration>
+
+
+说明；
+1.支持预约,则是PlanQueue对象,仅仅是叶子节点支持预约,父节点则抛异常
+2.不支持预约,则是LeafQueue
+3.ParentQueue 表示父节点
+4.不允许有两个相同name的叶子节点,但是允许有两个相同名字的父节点,以及允许两个相同的,一个是父节点,一个是叶子节点的两个节点,最好也别都一样名字
 
 全部标签
 
 属于每一个队列的标签
-yarn.scheduler.capacity.$queue.reservable
+
 yarn.scheduler.capacity.$queue.reservation-window
 yarn.scheduler.capacity.$queue.reservation-policy
 yarn.scheduler.capacity.$queue.reservation-agent
@@ -23,7 +40,6 @@ yarn.scheduler.capacity.$queue.accessible-node-labels
 yarn.scheduler.capacity.$queue.accessible-node-labels.label.capacity
 yarn.scheduler.capacity.$queue.accessible-node-labels.label.maximum-capacity
 yarn.scheduler.capacity.$queue.default-node-label-expression
-yarn.scheduler.capacity.$queue.queues
 yarn.scheduler.capacity.$queue.maximum-applications
 yarn.scheduler.capacity.$queue.maximum-am-resource-percent
 yarn.scheduler.capacity.$queue.maximum-capacity
@@ -42,3 +58,4 @@ yarn.scheduler.capacity.resource-calculator
 yarn.scheduler.capacity.schedule-asynchronously.enable
 yarn.scheduler.capacity.queue-mappings-override.enable
 yarn.scheduler.capacity.queue-mappings
+yarn.scheduler.capacity.schedule-asynchronously.scheduling-interval-ms

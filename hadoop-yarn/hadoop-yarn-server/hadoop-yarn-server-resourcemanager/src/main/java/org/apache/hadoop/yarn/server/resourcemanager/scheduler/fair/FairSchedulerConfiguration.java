@@ -52,6 +52,7 @@ public class FairSchedulerConfiguration extends Configuration {
   
   private static final String CONF_PREFIX =  "yarn.scheduler.fair.";
 
+  //配置文件的位置配置以及默认值
   public static final String ALLOCATION_FILE = CONF_PREFIX + "allocation.file";
   protected static final String DEFAULT_ALLOCATION_FILE = "fair-scheduler.xml";
   
@@ -59,7 +60,7 @@ public class FairSchedulerConfiguration extends Configuration {
   public static final String EVENT_LOG_ENABLED = CONF_PREFIX + "event-log-enabled";
   public static final boolean DEFAULT_EVENT_LOG_ENABLED = false;
 
-  protected static final String EVENT_LOG_DIR = "eventlog.dir";
+  protected static final String EVENT_LOG_DIR = "eventlog.dir";//事件日志存储目录
 
   /** Whether pools can be created that were not specified in the FS configuration file
    */
@@ -215,6 +216,7 @@ public class FairSchedulerConfiguration extends Configuration {
     return getBoolean(EVENT_LOG_ENABLED, DEFAULT_EVENT_LOG_ENABLED);
   }
   
+  //事件日志存储目录
   public String getEventlogDir() {
     return get(EVENT_LOG_DIR, new File(System.getProperty("hadoop.log.dir",
     		"/tmp/")).getAbsolutePath() + File.separator + "fairscheduler");

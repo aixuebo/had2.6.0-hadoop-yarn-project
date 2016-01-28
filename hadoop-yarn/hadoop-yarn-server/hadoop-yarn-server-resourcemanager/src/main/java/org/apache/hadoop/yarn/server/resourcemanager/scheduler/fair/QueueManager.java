@@ -39,7 +39,7 @@ import org.xml.sax.SAXException;
 /**
  * Maintains a list of queues as well as scheduling parameters for each queue,
  * such as guaranteed share allocations, from the fair scheduler config file.
- * 
+ * 管理所有的配置文件中队列Queue,每一个Queue的name都是用.连接起来的全路径,以root为开头
  */
 @Private
 @Unstable
@@ -49,12 +49,13 @@ public class QueueManager {
 
   public static final String ROOT_QUEUE = "root";
   
-  private final FairScheduler scheduler;
+  private final FairScheduler scheduler;//调度器
 
-  private final Collection<FSLeafQueue> leafQueues = 
-      new CopyOnWriteArrayList<FSLeafQueue>();
+  //每一个Queue的name都是用.连接起来的全路径,以root为开头
+  private final Collection<FSLeafQueue> leafQueues = new CopyOnWriteArrayList<FSLeafQueue>(); 
+  //key是queue的name,value是FSQueue队列,每一个Queue的name都是用.连接起来的全路径,以root为开头
   private final Map<String, FSQueue> queues = new HashMap<String, FSQueue>();
-  private FSParentQueue rootQueue;
+  private FSParentQueue rootQueue;//根ROOT队列
 
   public QueueManager(FairScheduler scheduler) {
     this.scheduler = scheduler;
@@ -64,12 +65,16 @@ public class QueueManager {
     return rootQueue;
   }
 
+  /**
+   * 1.创建root的父节点
+   * 2.创建default的叶子节点
+   */
   public void initialize(Configuration conf) throws IOException,
       SAXException, AllocationConfigurationException, ParserConfigurationException {
     rootQueue = new FSParentQueue("root", scheduler, null);
     queues.put(rootQueue.getName(), rootQueue);
     
-    // Create the default queue
+    // Create the default queue创建default的叶子节点
     getLeafQueue(YarnConfiguration.DEFAULT_QUEUE_NAME, true);
   }
   
@@ -83,6 +88,7 @@ public class QueueManager {
    * named "queue1" could be referred to  as just "queue1", and a queue named
    * "queue2" underneath a parent named "parent1" that is underneath the root 
    * could be referred to as just "parent1.queue2".
+   * 创建name的叶子节点,返回值一定是FSLeafQueue节点,否则返回null
    */
   public FSLeafQueue getLeafQueue(String name, boolean create) {
     FSQueue queue = getQueue(name, create, FSQueueType.LEAF);
@@ -102,6 +108,7 @@ public class QueueManager {
    * named "queue1" could be referred to  as just "queue1", and a queue named
    * "queue2" underneath a parent named "parent1" that is underneath the root 
    * could be referred to as just "parent1.queue2".
+   * 创建name的父节点,返回值一定是FSParentQueue节点,否则返回null
    */
   public FSParentQueue getParentQueue(String name, boolean create) {
     FSQueue queue = getQueue(name, create, FSQueueType.PARENT);
@@ -111,6 +118,12 @@ public class QueueManager {
     return (FSParentQueue) queue;
   }
   
+  /**
+   * 创建队列name,并且将name链路上所有的队列都创建了,同时创建完队列后,调用recomputeSteadyShares方法,重新计算资源
+   * @param create true则表示如果name不存在,则创建
+   * @param queueType
+   * 返回name对应的队列
+   */
   private FSQueue getQueue(String name, boolean create, FSQueueType queueType) {
     name = ensureRootPrefix(name);
     synchronized (queues) {
@@ -119,7 +132,7 @@ public class QueueManager {
         // if the queue doesn't exist,create it and return
         queue = createQueue(name, queueType);
 
-        // Update steady fair share for all queues
+        // Update steady fair share for all queues 更新队列的资源信息
         if (queue != null) {
           rootQueue.recomputeSteadyShares();
         }
@@ -135,28 +148,31 @@ public class QueueManager {
    * @return
    *    the created queue, if successful. null if not allowed (one of the parent
    *    queues in the queue name is already a leaf queue)
+   *    创建一个FSQueue队列
+   * 返回该name的队列
    */
   private FSQueue createQueue(String name, FSQueueType queueType) {
-    List<String> newQueueNames = new ArrayList<String>();
+    List<String> newQueueNames = new ArrayList<String>();//要添加的队列
     newQueueNames.add(name);
     int sepIndex = name.length();
     FSParentQueue parent = null;
 
     // Move up the queue tree until we reach one that exists.
+    //例如aa.bb.cc
     while (sepIndex != -1) {
       sepIndex = name.lastIndexOf('.', sepIndex-1);
       FSQueue queue;
       String curName = null;
-      curName = name.substring(0, sepIndex);
+      curName = name.substring(0, sepIndex);//第一次循环执行结果是aa.bb
       queue = queues.get(curName);
 
       if (queue == null) {
-        newQueueNames.add(curName);
+        newQueueNames.add(curName);//因为该父队列不存在,则添加该父队列
       } else {
-        if (queue instanceof FSParentQueue) {
+        if (queue instanceof FSParentQueue) {//说明队列存在,因此必须是FSParentQueue
           parent = (FSParentQueue)queue;
           break;
-        } else {
+        } else {//说明有异常,因此返回null
           return null;
         }
       }
@@ -168,9 +184,9 @@ public class QueueManager {
     // and add them to the map.
     AllocationConfiguration queueConf = scheduler.getAllocationConfiguration();
     FSLeafQueue leafQueue = null;
-    for (int i = newQueueNames.size()-1; i >= 0; i--) {
+    for (int i = newQueueNames.size()-1; i >= 0; i--) {//例如队列的name为aa.bb.cc,则从aa开始创建队列,最后一个是cc
       String queueName = newQueueNames.get(i);
-      if (i == 0 && queueType != FSQueueType.PARENT) {
+      if (i == 0 && queueType != FSQueueType.PARENT) {//i=0表示已经到了参数cc了,并且该节点又不是父节点,则因此创建子节点
         leafQueue = new FSLeafQueue(name, scheduler, parent);
         try {
           leafQueue.setPolicy(queueConf.getDefaultSchedulingPolicy());
@@ -184,6 +200,7 @@ public class QueueManager {
         leafQueue.updatePreemptionVariables();
         return leafQueue;
       } else {
+    	//创建一个FSParentQueue队列
         FSParentQueue newParent = new FSParentQueue(queueName, scheduler, parent);
         try {
           newParent.setPolicy(queueConf.getDefaultSchedulingPolicy());
@@ -234,7 +251,7 @@ public class QueueManager {
         }
         // remove incompatibility since queue is a leaf currently
         // needs to change to a parent.
-        return removeQueueIfEmpty(queue);
+        return removeQueueIfEmpty(queue);//说明队列不是叶子队列,则判断是否是空的父队列
       } else {
         if (queueType == FSQueueType.PARENT) {
           return true;
@@ -247,10 +264,11 @@ public class QueueManager {
 
     // Queue doesn't exist already. Check if the new queue would be created
     // under an existing leaf queue. If so, try removing that leaf queue.
+    //例如queueToCreate为aa.bb.cc
     int sepIndex = queueToCreate.length();
     sepIndex = queueToCreate.lastIndexOf('.', sepIndex-1);
     while (sepIndex != -1) {
-      String prefixString = queueToCreate.substring(0, sepIndex);
+      String prefixString = queueToCreate.substring(0, sepIndex);//第一次循环则改成aa.bb
       FSQueue prefixQueue = queues.get(prefixString);
       if (prefixQueue != null && prefixQueue instanceof FSLeafQueue) {
         return removeQueueIfEmpty(prefixQueue);
@@ -264,34 +282,43 @@ public class QueueManager {
    * Remove the queue if it and its descendents are all empty.
    * @param queue
    * @return true if removed, false otherwise
+   * 如果队列是空的,则移除该队列
    */
   private boolean removeQueueIfEmpty(FSQueue queue) {
     if (isEmpty(queue)) {
-      removeQueue(queue);
+      removeQueue(queue);//彻底移除一个队列的相关关系
       return true;
     }
     return false;
   }
   
   /**
+   * 彻底移除一个队列的相关关系
    * Remove a queue and all its descendents.
+   * 1.从queues缓存中移除该队列
+   * 2.从该队列的父队列中,移除该队列的映射
+   * 3.如果是叶子队列,直接移除即可
+   * 4.如果不是叶子队列,则移除所有的子队列
    */
   private void removeQueue(FSQueue queue) {
     if (queue instanceof FSLeafQueue) {
-      leafQueues.remove(queue);
-    } else {
+      leafQueues.remove(queue);//如果是叶子队列,直接移除即可
+    } else {//如果不是叶子队列,则移除所有的子队列
       List<FSQueue> childQueues = queue.getChildQueues();
       while (!childQueues.isEmpty()) {
         removeQueue(childQueues.get(0));
       }
     }
-    queues.remove(queue.getName());
-    queue.getParent().getChildQueues().remove(queue);
+    queues.remove(queue.getName());//从queues缓存中移除该队列
+    queue.getParent().getChildQueues().remove(queue);//从该队列的父队列中,移除该队列的映射
   }
   
   /**
    * Returns true if there are no applications, running or not, in the given
    * queue or any of its descendents.
+   * true表示该队列是否是空队列
+   * 1.如果是叶子节点,则是空的就是空的,即就返回true
+   * 2.如果是父节点,则所有的子节点必须都是空的,如果有任意一个不是空的,则返回false,都是空的,则返回true
    */
   protected boolean isEmpty(FSQueue queue) {
     if (queue instanceof FSLeafQueue) {
@@ -310,6 +337,7 @@ public class QueueManager {
 
   /**
    * Gets a queue by name.
+   * 通过名字获取队列
    */
   public FSQueue getQueue(String name) {
     name = ensureRootPrefix(name);
@@ -320,6 +348,7 @@ public class QueueManager {
 
   /**
    * Return whether a queue exists already.
+   * 判断名字的队列是否存在
    */
   public boolean exists(String name) {
     name = ensureRootPrefix(name);
@@ -330,6 +359,7 @@ public class QueueManager {
   
   /**
    * Get a collection of all leaf queues
+   * 获取所有的叶子节点队列
    */
   public Collection<FSLeafQueue> getLeafQueues() {
     synchronized (queues) {
@@ -339,11 +369,15 @@ public class QueueManager {
   
   /**
    * Get a collection of all queues
+   * 获取所有的队列,包括父队列以及叶子队列
    */
   public Collection<FSQueue> getQueues() {
     return queues.values();
   }
   
+  /**
+   * 将name改成root.name的方式
+   */
   private String ensureRootPrefix(String name) {
     if (!name.startsWith(ROOT_QUEUE + ".") && !name.equals(ROOT_QUEUE)) {
       name = ROOT_QUEUE + "." + name;
@@ -355,7 +389,7 @@ public class QueueManager {
     // Create leaf queues and the parent queues in a leaf's ancestry if they do not exist
     for (String name : queueConf.getConfiguredQueues().get(FSQueueType.LEAF)) {
       if (removeEmptyIncompatibleQueues(name, FSQueueType.LEAF)) {
-        getLeafQueue(name, true);
+        getLeafQueue(name, true);//创建name的叶子节点
       }
     }
 
@@ -364,10 +398,11 @@ public class QueueManager {
     for (String name : queueConf.getConfiguredQueues().get(
         FSQueueType.PARENT)) {
       if (removeEmptyIncompatibleQueues(name, FSQueueType.PARENT)) {
-        getParentQueue(name, true);
+        getParentQueue(name, true);//创建name的父节点
       }
     }
     
+    //循环所有的父节点和叶子节点,然后调用每一个节点的SchedulingPolicy的initialize方法
     for (FSQueue queue : queues.values()) {
       // Update queue metrics
       FSQueueMetrics queueMetrics = queue.getMetrics();

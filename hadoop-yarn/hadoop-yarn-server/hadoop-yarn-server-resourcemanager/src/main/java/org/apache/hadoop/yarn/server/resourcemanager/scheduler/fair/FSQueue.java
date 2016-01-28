@@ -42,7 +42,7 @@ import org.apache.hadoop.yarn.util.resource.Resources;
 @Unstable
 public abstract class FSQueue implements Queue, Schedulable {
   private Resource fairShare = Resources.createResource(0, 0);
-  private Resource steadyFairShare = Resources.createResource(0, 0);
+  private Resource steadyFairShare = Resources.createResource(0, 0);//稳定不变的
   private final String name;
   protected final FairScheduler scheduler;
   private final FSQueueMetrics metrics;
@@ -97,11 +97,13 @@ public abstract class FSQueue implements Queue, Schedulable {
     return scheduler.getAllocationConfiguration().getQueueWeight(getName());
   }
   
+  //获取该队列最小的使用量,当该队列资源使用小于该值的时候,可以不断加入app资源
   @Override
   public Resource getMinShare() {
     return scheduler.getAllocationConfiguration().getMinResources(getName());
   }
   
+  //获取该队列最大的使用量,当该队列资源使用大于该值的时候,处于饥饿状态
   @Override
   public Resource getMaxShare() {
     return scheduler.getAllocationConfiguration().getMaxResources(getName());
@@ -204,6 +206,7 @@ public abstract class FSQueue implements Queue, Schedulable {
 
   /**
    * Update the min/fair share preemption timeouts and threshold for this queue.
+   * 一旦一个队列创建完成后,则调用该方法
    */
   public void updatePreemptionVariables() {
     // For min share timeout
@@ -228,12 +231,15 @@ public abstract class FSQueue implements Queue, Schedulable {
 
   /**
    * Gets the children of this queue, if any.
+   * 获取所有的一级子节点
    */
   public abstract List<FSQueue> getChildQueues();
   
   /**
    * Adds all applications in the queue and its subqueues to the given collection.
    * @param apps the collection to add the applications to
+   * 获取该父节点下所有的叶子节点上运行的app集合
+   * 包含运行的和非运行的所有app集合,最终都存储到参数集合中
    */
   public abstract void collectSchedulerApplications(
       Collection<ApplicationAttemptId> apps);
@@ -241,6 +247,7 @@ public abstract class FSQueue implements Queue, Schedulable {
   /**
    * Return the number of apps for which containers can be allocated.
    * Includes apps in subqueues.
+   * 获取所有的app运行中的数量
    */
   public abstract int getNumRunnableApps();
   
@@ -260,6 +267,7 @@ public abstract class FSQueue implements Queue, Schedulable {
 
   /**
    * Returns true if queue has at least one app running.
+   * 队列是否还活跃,即是否有任务在运行中
    */
   public boolean isActive() {
     return getNumRunnableApps() > 0;

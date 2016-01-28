@@ -28,12 +28,13 @@ import org.apache.hadoop.conf.Configured;
  * for a certain amount of time -- by default, a 3x weight boost for 60 seconds.
  * This can be used to make shorter jobs finish faster, emulating Shortest Job
  * First scheduling while not starving long jobs.
+ * 为新的app要加一些权重,默认是提升3倍权重,这个目的是可以让短小的job提前完成,让没有被饥饿很长时间的job提前跑,万一能跑完呢
  */
 @Private
 @Unstable
 public class NewAppWeightBooster extends Configured implements WeightAdjuster {
   private static final float DEFAULT_FACTOR = 3;
-  private static final long DEFAULT_DURATION = 5 * 60 * 1000;
+  private static final long DEFAULT_DURATION = 5 * 60 * 1000;//5Min
 
   private float factor;
   private long duration;
@@ -48,6 +49,9 @@ public class NewAppWeightBooster extends Configured implements WeightAdjuster {
     super.setConf(conf);
   }
 
+  /**
+   * 如果任务的开启时间到现在 小于 一定周期内,则权重设置给高一些
+   */
   public double adjustWeight(FSAppAttempt app, double curWeight) {
     long start = app.getStartTime();
     long now = System.currentTimeMillis();

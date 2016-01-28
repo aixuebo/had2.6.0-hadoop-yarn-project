@@ -175,6 +175,10 @@ public class SchedulerApplicationAttempt {
     return appSchedulingInfo.getUser();
   }
 
+  /**
+   * 获取该优先级下,每一个资源name对应的请求,
+   * 注意ResourceRequest包含了每一个容器的资源，以及多少个容器
+   */
   public Map<String, ResourceRequest> getResourceRequests(Priority priority) {
     return appSchedulingInfo.getResourceRequests(priority);
   }

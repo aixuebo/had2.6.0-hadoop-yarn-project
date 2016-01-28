@@ -46,8 +46,11 @@ public class FSLeafQueue extends FSQueue {
   private static final Log LOG = LogFactory.getLog(
       FSLeafQueue.class.getName());
 
+  //运行的应用集合
   private final List<FSAppAttempt> runnableApps = // apps that are runnable
       new ArrayList<FSAppAttempt>();
+  
+  //尚未运行的应用集合
   private final List<FSAppAttempt> nonRunnableApps =
       new ArrayList<FSAppAttempt>();
   
@@ -58,10 +61,16 @@ public class FSLeafQueue extends FSQueue {
   private long lastTimeAtFairShareThreshold;
   
   // Track the AM resource usage for this queue
-  private Resource amResourceUsage;
+  private Resource amResourceUsage;//该队列中AM使用的资源量
 
   private final ActiveUsersManager activeUsersManager;
   
+  /**
+   * 
+   * @param name 该队列的名称,可能是root.aa.bb这种形式的name
+   * @param scheduler 总的调度器
+   * @param parent 该队列的父队列
+   */
   public FSLeafQueue(String name, FairScheduler scheduler,
       FSParentQueue parent) {
     super(name, scheduler, parent);
@@ -71,6 +80,11 @@ public class FSLeafQueue extends FSQueue {
     amResourceUsage = Resource.newInstance(0, 0);
   }
   
+  /**
+   * 一个app加入该队列
+   * @param app
+   * @param runnable true表示该app已经运行了
+   */
   public void addApp(FSAppAttempt app, boolean runnable) {
     if (runnable) {
       runnableApps.add(app);
@@ -86,18 +100,18 @@ public class FSLeafQueue extends FSQueue {
   
   /**
    * Removes the given app from this queue.
-   * @return whether or not the app was runnable
+   * @return whether or not the app was runnable 返回该移除的app是否是运行中的
    */
   public boolean removeApp(FSAppAttempt app) {
-    if (runnableApps.remove(app)) {
+    if (runnableApps.remove(app)) {//说明该app是运行中的,因此返回true
       // Update AM resource usage
-      if (app.isAmRunning() && app.getAMResource() != null) {
+      if (app.isAmRunning() && app.getAMResource() != null) {//减少该队列中AM的资源
         Resources.subtractFrom(amResourceUsage, app.getAMResource());
       }
       return true;
-    } else if (nonRunnableApps.remove(app)) {
+    } else if (nonRunnableApps.remove(app)) {//说明该app不是运行中的,因此返回false
       return false;
-    } else {
+    } else {//说明不存在这个app
       throw new IllegalStateException("Given app to remove " + app +
           " does not exist in queue " + this);
     }
@@ -111,6 +125,9 @@ public class FSLeafQueue extends FSQueue {
     return nonRunnableApps;
   }
   
+  /**
+   * 返回该队列上所有运行的app尝试ID集合
+   */
   @Override
   public void collectSchedulerApplications(
       Collection<ApplicationAttemptId> apps) {
@@ -141,6 +158,9 @@ public class FSLeafQueue extends FSQueue {
     return demand;
   }
 
+  /**
+   * 计算该队列所有使用的资源
+   */
   @Override
   public Resource getResourceUsage() {
     Resource usage = Resources.createResource(0);
@@ -157,6 +177,9 @@ public class FSLeafQueue extends FSQueue {
     return amResourceUsage;
   }
 
+  /**
+   * 更新所有的app使用的资源量
+   */
   @Override
   public void updateDemand() {
     // Compute demand by iterating through apps in the queue
@@ -182,6 +205,9 @@ public class FSLeafQueue extends FSQueue {
     }
   }
   
+  /**
+   * 更新app使用的资源量
+   */
   private void updateDemandForApp(FSAppAttempt sched, Resource maxRes) {
     sched.updateDemand();
     Resource toAdd = sched.getDemand();
@@ -251,6 +277,7 @@ public class FSLeafQueue extends FSQueue {
     return toBePreempted;
   }
 
+  //返回空的子队列
   @Override
   public List<FSQueue> getChildQueues() {
     return new ArrayList<FSQueue>(1);
@@ -289,6 +316,7 @@ public class FSLeafQueue extends FSQueue {
     this.lastTimeAtFairShareThreshold = lastTimeAtFairShareThreshold;
   }
 
+  //返回该队列上正在运行的app数量
   @Override
   public int getNumRunnableApps() {
     return runnableApps.size();
@@ -318,6 +346,7 @@ public class FSLeafQueue extends FSQueue {
         .checkIfAMResourceUsageOverLimit(ifRunAMResource, maxAMResource);
   }
 
+  //对该队列添加AM的资源
   public void addAMResourceUsage(Resource amResource) {
     if (amResource != null) {
       Resources.addTo(amResourceUsage, amResource);
@@ -371,7 +400,12 @@ public class FSLeafQueue extends FSQueue {
         Resources.multiply(getFairShare(), getFairSharePreemptionThreshold()));
   }
 
+  /**
+   * true表示饥饿
+   * @param share 表示当前队列分配的最小的资源使用量
+   */
   private boolean isStarved(Resource share) {
+	  //渴望的分配,min(队列最小的使用量,队列已经分配的量),如果队列最小的使用量 > 队列已经分配的量,则返回队列已经分配的量,反之,返回队列最小的使用量
     Resource desiredShare = Resources.min(FairScheduler.getResourceCalculator(),
         scheduler.getClusterResource(), share, getDemand());
     return Resources.lessThan(FairScheduler.getResourceCalculator(),

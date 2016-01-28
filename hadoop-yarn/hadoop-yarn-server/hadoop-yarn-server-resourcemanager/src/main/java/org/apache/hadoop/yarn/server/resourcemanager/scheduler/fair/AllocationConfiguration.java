@@ -32,6 +32,9 @@ import org.apache.hadoop.yarn.util.resource.Resources;
 
 import com.google.common.annotations.VisibleForTesting;
 
+/**
+ * 该对象是AllocationFileLoaderService解析fair-scheduler.xml配置文件后产生的配置信息对象
+ */
 public class AllocationConfiguration {
   private static final AccessControlList EVERYBODY_ACL = new AccessControlList("*");
   private static final AccessControlList NOBODY_ACL = new AccessControlList(" ");

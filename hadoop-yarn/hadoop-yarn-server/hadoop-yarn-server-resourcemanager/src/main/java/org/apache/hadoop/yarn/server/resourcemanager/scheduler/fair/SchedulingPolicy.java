@@ -98,6 +98,7 @@ public abstract class SchedulingPolicy {
 
   /**
    * @return returns the name of {@link SchedulingPolicy}
+   * 策略的名称
    */
   public abstract String getName();
 
@@ -127,6 +128,7 @@ public abstract class SchedulingPolicy {
    * {@link Schedulable}s in that queue.
    * 
    * @return the comparator to sort by
+   * 针对调度器的排序规则
    */
   public abstract Comparator<Schedulable> getComparator();
 

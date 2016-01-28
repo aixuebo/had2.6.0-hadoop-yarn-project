@@ -32,5 +32,10 @@ import org.apache.hadoop.conf.Configurable;
 @Private
 @Unstable
 public interface WeightAdjuster {
+	/**
+	 * 适当根据一些条件,去调节当前的权重值 
+	 * @param app 当前app的尝试任务
+	 * @param curWeight 当前权重
+	 */
   public double adjustWeight(FSAppAttempt app, double curWeight);
 }

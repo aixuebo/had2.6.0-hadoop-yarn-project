@@ -183,9 +183,9 @@ public class FairScheduler extends
   @VisibleForTesting
   final MaxRunningAppsEnforcer maxRunningEnforcer;
 
-  private AllocationFileLoaderService allocsLoader;
+  private AllocationFileLoaderService allocsLoader;//加载配置文件的服务
   @VisibleForTesting
-  AllocationConfiguration allocConf;
+  AllocationConfiguration allocConf;//最新的fair-scheduler.xml配置文件内容
   
   public FairScheduler() {
     super(FairScheduler.class.getName());
@@ -326,6 +326,7 @@ public class FairScheduler extends
    * Update the preemption fields for all QueueScheduables, i.e. the times since
    * each queue last was at its guaranteed share and over its fair share
    * threshold for each type of task.
+   * 更新每一个叶子队列的饥饿状态
    */
   private void updateStarvationStats() {
     lastPreemptionUpdateTime = clock.getTime();
@@ -1377,6 +1378,9 @@ public class FairScheduler extends
     return allocConf;
   }
   
+  /**
+   * 当fair-scheduler.xml配置文件重新读取后,则调用该方法
+   */
   private class AllocationReloadListener implements
       AllocationFileLoaderService.Listener {
 

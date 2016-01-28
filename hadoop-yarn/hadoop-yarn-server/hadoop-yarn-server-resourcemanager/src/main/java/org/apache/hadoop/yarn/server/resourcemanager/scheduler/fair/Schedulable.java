@@ -64,7 +64,9 @@ public interface Schedulable {
    */
   public Resource getDemand();
 
-  /** Get the aggregate amount of resources consumed by the schedulable. */
+  /** Get the aggregate amount of resources consumed by the schedulable.
+   * 获取该队列已经使用的资源 
+   **/
   public Resource getResourceUsage();
 
   /** Minimum Resource share assigned to the schedulable. */

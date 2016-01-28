@@ -47,7 +47,7 @@ public class FSParentQueue extends FSQueue {
   private final List<FSQueue> childQueues = 
       new ArrayList<FSQueue>();
   private Resource demand = Resources.createResource(0);
-  private int runnableApps;
+  private int runnableApps;//该队列已经运行的app数量,属于该队列所有的叶子节点已经运行的app数量
   
   public FSParentQueue(String name, FairScheduler scheduler,
       FSParentQueue parent) {
@@ -67,6 +67,7 @@ public class FSParentQueue extends FSQueue {
     }
   }
 
+  //重新计算资源
   public void recomputeSteadyShares() {
     policy.computeSteadyShares(childQueues, getSteadyFairShare());
     for (FSQueue childQueue : childQueues) {
@@ -91,6 +92,9 @@ public class FSParentQueue extends FSQueue {
     return demand;
   }
 
+  /**
+   * 获取该队列已经使用的资源
+   */
   @Override
   public Resource getResourceUsage() {
     Resource usage = Resources.createResource(0);
@@ -217,19 +221,26 @@ public class FSParentQueue extends FSQueue {
     super.policy = policy;
   }
   
+  //增加该队列已经运行的app数量,属于该队列所有的叶子节点已经运行的app数量
   public void incrementRunnableApps() {
     runnableApps++;
   }
   
+  //减少该队列已经运行的app数量,属于该队列所有的叶子节点已经运行的app数量
   public void decrementRunnableApps() {
     runnableApps--;
   }
 
+  //该队列已经运行的app数量,属于该队列所有的叶子节点已经运行的app数量
   @Override
   public int getNumRunnableApps() {
     return runnableApps;
   }
 
+  /**
+   * 获取该父节点下所有的叶子节点上运行的app集合
+   * 包含运行的和非运行的所有app集合,最终都存储到参数集合中
+   */
   @Override
   public void collectSchedulerApplications(
       Collection<ApplicationAttemptId> apps) {
