@@ -1,124 +1,6 @@
-/**
- * Licensed to the Apache Software Foundation (ASF) under one
- * or more contributor license agreements.  See the NOTICE file
- * distributed with this work for additional information
- * regarding copyright ownership.  The ASF licenses this file
- * to you under the Apache License, Version 2.0 (the
- * "License"); you may not use this file except in compliance
- * with the License.  You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
-
-package org.apache.hadoop.yarn.server.resourcemanager.scheduler.capacity;
-
-import java.io.IOException;
-import java.io.InputStream;
-import java.util.ArrayList;
-import java.util.Collection;
-import java.util.Comparator;
-import java.util.EnumSet;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
-import java.util.Random;
-import java.util.Set;
-import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.atomic.AtomicBoolean;
-import java.util.concurrent.atomic.AtomicInteger;
-import java.util.HashSet;
-import java.util.Set;
-
-import org.apache.commons.logging.Log;
-import org.apache.commons.logging.LogFactory;
-import org.apache.hadoop.classification.InterfaceAudience.LimitedPrivate;
-import org.apache.hadoop.classification.InterfaceAudience.Private;
-import org.apache.hadoop.classification.InterfaceStability.Evolving;
-import org.apache.hadoop.conf.Configurable;
-import org.apache.hadoop.conf.Configuration;
-import org.apache.hadoop.security.AccessControlException;
-import org.apache.hadoop.security.Groups;
-import org.apache.hadoop.security.UserGroupInformation;
-import org.apache.hadoop.yarn.api.records.ApplicationAttemptId;
-import org.apache.hadoop.yarn.api.records.ApplicationId;
-import org.apache.hadoop.yarn.api.records.Container;
-import org.apache.hadoop.yarn.api.records.ContainerId;
-import org.apache.hadoop.yarn.api.records.ContainerStatus;
-import org.apache.hadoop.yarn.api.records.NodeId;
-import org.apache.hadoop.yarn.api.records.QueueACL;
-import org.apache.hadoop.yarn.api.records.QueueInfo;
-import org.apache.hadoop.yarn.api.records.QueueUserACLInfo;
-import org.apache.hadoop.yarn.api.records.ResourceOption;
-import org.apache.hadoop.yarn.api.records.ResourceRequest;
-import org.apache.hadoop.yarn.conf.YarnConfiguration;
-import org.apache.hadoop.yarn.exceptions.YarnException;
-import org.apache.hadoop.yarn.exceptions.YarnRuntimeException;
-import org.apache.hadoop.yarn.proto.YarnServiceProtos.SchedulerResourceTypes;
-import org.apache.hadoop.yarn.server.resourcemanager.RMContext;
-import org.apache.hadoop.yarn.server.resourcemanager.nodelabels.RMNodeLabelsManager;
-import org.apache.hadoop.yarn.server.resourcemanager.recovery.RMStateStore.RMState;
-import org.apache.hadoop.yarn.server.resourcemanager.rmapp.RMApp;
-import org.apache.hadoop.yarn.server.resourcemanager.rmapp.RMAppEvent;
-import org.apache.hadoop.yarn.server.resourcemanager.rmapp.RMAppEventType;
-import org.apache.hadoop.yarn.server.resourcemanager.rmapp.RMAppRejectedEvent;
-import org.apache.hadoop.yarn.server.resourcemanager.rmapp.RMAppState;
-import org.apache.hadoop.yarn.server.resourcemanager.rmapp.attempt.RMAppAttemptEvent;
-import org.apache.hadoop.yarn.server.resourcemanager.rmapp.attempt.RMAppAttemptEventType;
-import org.apache.hadoop.yarn.server.resourcemanager.rmapp.attempt.RMAppAttemptState;
-import org.apache.hadoop.yarn.server.resourcemanager.rmcontainer.RMContainer;
-import org.apache.hadoop.yarn.server.resourcemanager.rmcontainer.RMContainerEventType;
-import org.apache.hadoop.yarn.server.resourcemanager.rmcontainer.RMContainerState;
-import org.apache.hadoop.yarn.server.resourcemanager.rmnode.RMNode;
-import org.apache.hadoop.yarn.server.resourcemanager.rmnode.UpdatedContainerInfo;
-import org.apache.hadoop.yarn.server.resourcemanager.scheduler.AbstractYarnScheduler;
-import org.apache.hadoop.yarn.server.resourcemanager.scheduler.Allocation;
-import org.apache.hadoop.yarn.server.resourcemanager.scheduler.PreemptableResourceScheduler;
-import org.apache.hadoop.yarn.server.resourcemanager.scheduler.QueueMetrics;
-import org.apache.hadoop.yarn.server.resourcemanager.scheduler.QueueNotFoundException;
-import org.apache.hadoop.yarn.server.resourcemanager.scheduler.SchedulerApplication;
-import org.apache.hadoop.yarn.server.resourcemanager.scheduler.SchedulerUtils;
-import org.apache.hadoop.yarn.server.resourcemanager.scheduler.capacity.CapacitySchedulerConfiguration.QueueMapping;
-import org.apache.hadoop.yarn.server.resourcemanager.scheduler.capacity.CapacitySchedulerConfiguration.QueueMapping.MappingType;
-import org.apache.hadoop.yarn.server.resourcemanager.scheduler.common.fica.FiCaSchedulerApp;
-import org.apache.hadoop.yarn.server.resourcemanager.scheduler.common.fica.FiCaSchedulerNode;
-import org.apache.hadoop.yarn.server.resourcemanager.scheduler.event.AppAddedSchedulerEvent;
-import org.apache.hadoop.yarn.server.resourcemanager.scheduler.event.AppAttemptAddedSchedulerEvent;
-import org.apache.hadoop.yarn.server.resourcemanager.scheduler.event.AppAttemptRemovedSchedulerEvent;
-import org.apache.hadoop.yarn.server.resourcemanager.scheduler.event.AppRemovedSchedulerEvent;
-import org.apache.hadoop.yarn.server.resourcemanager.scheduler.event.ContainerExpiredSchedulerEvent;
-import org.apache.hadoop.yarn.server.resourcemanager.scheduler.event.NodeAddedSchedulerEvent;
-import org.apache.hadoop.yarn.server.resourcemanager.scheduler.event.NodeRemovedSchedulerEvent;
-import org.apache.hadoop.yarn.server.resourcemanager.scheduler.event.NodeResourceUpdateSchedulerEvent;
-import org.apache.hadoop.yarn.server.resourcemanager.scheduler.event.NodeUpdateSchedulerEvent;
-import org.apache.hadoop.yarn.server.resourcemanager.scheduler.event.SchedulerEvent;
-import org.apache.hadoop.yarn.server.resourcemanager.security.RMContainerTokenSecretManager;
-import org.apache.hadoop.yarn.server.utils.Lock;
-import org.apache.hadoop.yarn.util.resource.DefaultResourceCalculator;
-import org.apache.hadoop.yarn.util.resource.ResourceCalculator;
-import org.apache.hadoop.yarn.util.resource.Resources;
-
-import com.google.common.annotations.VisibleForTesting;
-import com.google.common.base.Preconditions;
-
-import org.apache.hadoop.yarn.api.records.ReservationId;
-import org.apache.hadoop.yarn.server.resourcemanager.scheduler.common.QueueEntitlement;
-import org.apache.hadoop.yarn.server.resourcemanager.scheduler.SchedulerDynamicEditException;
-import org.apache.hadoop.yarn.server.resourcemanager.scheduler.Queue;
-
-@LimitedPrivate("yarn")
-@Evolving
-@SuppressWarnings("unchecked")
 public class CapacityScheduler extends
     AbstractYarnScheduler<FiCaSchedulerApp, FiCaSchedulerNode> implements
     PreemptableResourceScheduler, CapacitySchedulerContext, Configurable {
-
-  private static final Log LOG = LogFactory.getLog(CapacityScheduler.class);
 
   private CSQueue root;
   // timeout to join when we stop this service
@@ -144,63 +26,7 @@ public class CapacityScheduler extends
       return a1.getApplicationId().compareTo(a2.getApplicationId());
     }
   };
-
-  @Override
-  public void setConf(Configuration conf) {
-      yarnConf = conf;
-  }
-  
-  /**
-   * 校验最大、最下内存、cpu配置
-   */
-  private void validateConf(Configuration conf) {
-    // validate scheduler memory allocation setting
-    int minMem = conf.getInt(
-      YarnConfiguration.RM_SCHEDULER_MINIMUM_ALLOCATION_MB,
-      YarnConfiguration.DEFAULT_RM_SCHEDULER_MINIMUM_ALLOCATION_MB);
-    int maxMem = conf.getInt(
-      YarnConfiguration.RM_SCHEDULER_MAXIMUM_ALLOCATION_MB,
-      YarnConfiguration.DEFAULT_RM_SCHEDULER_MAXIMUM_ALLOCATION_MB);
-
-    if (minMem <= 0 || minMem > maxMem) {
-      throw new YarnRuntimeException("Invalid resource scheduler memory"
-        + " allocation configuration"
-        + ", " + YarnConfiguration.RM_SCHEDULER_MINIMUM_ALLOCATION_MB
-        + "=" + minMem
-        + ", " + YarnConfiguration.RM_SCHEDULER_MAXIMUM_ALLOCATION_MB
-        + "=" + maxMem + ", min and max should be greater than 0"
-        + ", max should be no smaller than min.");
-    }
-
-    // validate scheduler vcores allocation setting
-    int minVcores = conf.getInt(
-      YarnConfiguration.RM_SCHEDULER_MINIMUM_ALLOCATION_VCORES,
-      YarnConfiguration.DEFAULT_RM_SCHEDULER_MINIMUM_ALLOCATION_VCORES);
-    int maxVcores = conf.getInt(
-      YarnConfiguration.RM_SCHEDULER_MAXIMUM_ALLOCATION_VCORES,
-      YarnConfiguration.DEFAULT_RM_SCHEDULER_MAXIMUM_ALLOCATION_VCORES);
-
-    if (minVcores <= 0 || minVcores > maxVcores) {
-      throw new YarnRuntimeException("Invalid resource scheduler vcores"
-        + " allocation configuration"
-        + ", " + YarnConfiguration.RM_SCHEDULER_MINIMUM_ALLOCATION_VCORES
-        + "=" + minVcores
-        + ", " + YarnConfiguration.RM_SCHEDULER_MAXIMUM_ALLOCATION_VCORES
-        + "=" + maxVcores + ", min and max should be greater than 0"
-        + ", max should be no smaller than min.");
-    }
-  }
-
-  @Override
-  public Configuration getConf() {
-    return yarnConf;
-  }
-
-  private CapacitySchedulerConfiguration conf;//加载capacity-scheduler.xml配置文件
-  private Configuration yarnConf;
-
-  //解析配置文件后,所有的队列的name与队列之间的映射关系
-  private Map<String, CSQueue> queues = new ConcurrentHashMap<String, CSQueue>();
+eues = new ConcurrentHashMap<String, CSQueue>();
 
   //记录集群中节点数量
   private AtomicInteger numNodeManagers = new AtomicInteger(0);
@@ -285,71 +111,7 @@ public class CapacityScheduler extends
     this.rmContext = rmContext;
   }
 
-  private synchronized void initScheduler(Configuration configuration) throws IOException {
-      
-    this.conf = loadCapacitySchedulerConfiguration(configuration);//加载capacity-scheduler.xml配置文件
-    validateConf(this.conf);
-    this.minimumAllocation = this.conf.getMinimumAllocation();
-    this.maximumAllocation = this.conf.getMaximumAllocation();
-    this.calculator = this.conf.getResourceCalculator();
-    this.usePortForNodeName = this.conf.getUsePortForNodeName();
-    this.applications =
-        new ConcurrentHashMap<ApplicationId,
-            SchedulerApplication<FiCaSchedulerApp>>();
-    this.labelManager = rmContext.getNodeLabelManager();
 
-    initializeQueues(this.conf);
-
-    scheduleAsynchronously = this.conf.getScheduleAynschronously();
-    asyncScheduleInterval =
-        this.conf.getLong(ASYNC_SCHEDULER_INTERVAL,
-            DEFAULT_ASYNC_SCHEDULER_INTERVAL);
-    if (scheduleAsynchronously) {
-      asyncSchedulerThread = new AsyncScheduleThread(this);
-    }
-
-    LOG.info("Initialized CapacityScheduler with " +
-        "calculator=" + getResourceCalculator().getClass() + ", " +
-        "minimumAllocation=<" + getMinimumResourceCapability() + ">, " +
-        "maximumAllocation=<" + getMaximumResourceCapability() + ">, " +
-        "asynchronousScheduling=" + scheduleAsynchronously + ", " +
-        "asyncScheduleInterval=" + asyncScheduleInterval + "ms");
-  }
-
-  /**
-   * 启动定时线程
-   */
-  private synchronized void startSchedulerThreads() {
-    if (scheduleAsynchronously) {
-      Preconditions.checkNotNull(asyncSchedulerThread,
-          "asyncSchedulerThread is null");
-      asyncSchedulerThread.start();
-    }
-  }
-
-  @Override
-  public void serviceInit(Configuration conf) throws Exception {
-    Configuration configuration = new Configuration(conf);
-    initScheduler(configuration);
-    super.serviceInit(conf);
-  }
-
-  @Override
-  public void serviceStart() throws Exception {
-    startSchedulerThreads();
-    super.serviceStart();
-  }
-
-  @Override
-  public void serviceStop() throws Exception {
-    synchronized (this) {
-      if (scheduleAsynchronously && asyncSchedulerThread != null) {
-        asyncSchedulerThread.interrupt();
-        asyncSchedulerThread.join(THREAD_JOIN_TIMEOUT_MS);
-      }
-    }
-    super.serviceStop();
-  }
 
   @Override
   public synchronized void
@@ -367,9 +129,6 @@ public class CapacityScheduler extends
     }
   }
   
-  long getAsyncScheduleInterval() {
-    return asyncScheduleInterval;
-  }
 
   private final static Random random = new Random(System.currentTimeMillis());
   
@@ -478,28 +237,6 @@ public class CapacityScheduler extends
     initializeQueueMappings();
   }
 
-  @Lock(CapacityScheduler.class)
-  private void reinitializeQueues(CapacitySchedulerConfiguration conf) 
-  throws IOException {
-    // Parse new queues
-    Map<String, CSQueue> newQueues = new HashMap<String, CSQueue>();
-    CSQueue newRoot = parseQueue(this, conf, null, CapacitySchedulerConfiguration.ROOT,newQueues, queues, noop); 
-    
-    // Ensure all existing queues are still present校验老集合中非ReservationQueue的队列必须在集合中依然存在
-    validateExistingQueues(queues, newQueues);
-
-    // Add new queues 重新加载队列后,会可能有新的队列被添加到新的配置文件中,因此这部分主要是整合新老队列
-    addNewQueues(queues, newQueues);
-    
-    // Re-configure queues
-    root.reinitialize(newRoot, clusterResource);
-    initializeQueueMappings();
-
-    // Re-calculate headroom for active applications
-    root.updateClusterResource(clusterResource);
-
-    labelManager.reinitializeQueueLabels(getQueueToLabels());
-  }
   
   /**
    * 返回每一个队列对应的标签集合
@@ -512,123 +249,6 @@ public class CapacityScheduler extends
     return queueToLabels;
   }
 
-  /**
-   * Ensure all existing queues are present. Queues cannot be deleted
-   * @param queues existing queues 老配置文件加载后的队列集合
-   * @param newQueues new queues 新加载的配置文件的队列集合
-   * 校验老集合中非ReservationQueue的队列必须在集合中依然存在
-   * 重新加载队列后,会可能有新的队列被添加到新的配置文件中,因此这部分主要是整合新老队列
-   */
-  @Lock(CapacityScheduler.class)
-  private void validateExistingQueues(Map<String, CSQueue> queues, Map<String, CSQueue> newQueues) throws IOException {
-    // check that all static queues are included in the newQueues list
-    for (Map.Entry<String, CSQueue> e : queues.entrySet()) {//循环老的集合
-      if (!(e.getValue() instanceof ReservationQueue)) {
-        if (!newQueues.containsKey(e.getKey())) {
-          throw new IOException(e.getKey() + " cannot be found during refresh!");
-        }
-      }
-    }
-  }
-
-  /**
-   * Add the new queues (only) to our list of queues...
-   * ... be careful, do not overwrite existing queues.
-   * @param queues 老配置文件加载后的队列集合
-   * @param newQueues 新加载的配置文件的队列集合
-   * 添加一些队列集合,新集合中不会覆盖老集合信息
-   * 重新加载队列后,会可能有新的队列被添加到新的配置文件中,因此这部分主要是整合新老队列
-   */
-  @Lock(CapacityScheduler.class)
-  private void addNewQueues(Map<String, CSQueue> queues, Map<String, CSQueue> newQueues){ 
-    for (Map.Entry<String, CSQueue> e : newQueues.entrySet()) {
-      String queueName = e.getKey();
-      CSQueue queue = e.getValue();
-      if (!queues.containsKey(queueName)) {
-        queues.put(queueName, queue);
-      }
-    }
-  }
-  
-  /**
-   * 解析配置文件递归生成所有队列集合映射关系
-   * @param csContext
-   * @param conf
-   * @param parent
-   * @param queueName
-   * @param queues 最终新城的所有队列映射集合
-   * @param oldQueues 老队列用于重新加载配置文件的时候,老队列表示上一次读取配置文件后加载的队列
-   * @param hook
-   * @return
-   * @throws IOException
-   */
-  @Lock(CapacityScheduler.class)
-  static CSQueue parseQueue(
-      CapacitySchedulerContext csContext,
-      CapacitySchedulerConfiguration conf, 
-      CSQueue parent, String queueName, Map<String, CSQueue> queues,
-      Map<String, CSQueue> oldQueues, 
-      QueueHook hook) throws IOException {
-    CSQueue queue;
-    //根据父节点和本节点名称,解析去路径
-    String fullQueueName = (parent == null) ? queueName : (parent.getQueuePath() + "." + queueName);
-    //获取该节点下所有子节点集合
-    String[] childQueueNames = conf.getQueues(fullQueueName); 
-    //该队列是否支持预约
-    boolean isReservableQueue = conf.isReservable(fullQueueName);
-    //没有子队列
-    if (childQueueNames == null || childQueueNames.length == 0) {
-      if (null == parent) {//没有子队列,说明一定存在父队列
-        throw new IllegalStateException(
-            "Queue configuration missing child queue names for " + queueName);
-      }
-      // Check if the queue will be dynamically managed by the Reservation
-      // system
-      if (isReservableQueue) {//支持预约
-        queue = new PlanQueue(csContext, queueName, parent,oldQueues.get(queueName));
-      } else {
-        queue = new LeafQueue(csContext, queueName, parent,oldQueues.get(queueName));
-        // Used only for unit tests
-        queue = hook.hook(queue);
-      }
-    } else {//说明设置了子节点,因此该节点属于父节点
-      //仅仅叶子节点才允许设置预留,非叶子节点不允许,因此抛异常
-      if (isReservableQueue) {
-        throw new IllegalStateException(
-            "Only Leaf Queues can be reservable for " + queueName);
-      }
-      ParentQueue parentQueue = new ParentQueue(csContext, queueName, parent,oldQueues.get(queueName)); 
-      // Used only for unit tests
-      queue = hook.hook(parentQueue);
-
-      List<CSQueue> childQueues = new ArrayList<CSQueue>();
-      for (String childQueueName : childQueueNames) {
-        CSQueue childQueue = parseQueue(csContext, conf, queue, childQueueName,queues, oldQueues, hook); 
-        childQueues.add(childQueue);
-      }
-      parentQueue.setChildQueues(childQueues);
-    }
-
-    /**
-     * 不允许叶子节点有相同的节点名称
-     * 不允许有两个相同name的叶子节点,但是允许有两个相同名字的父节点,以及允许两个相同的,一个是父节点,一个是叶子节点的两个节点
-     */
-    if(queue instanceof LeafQueue == true && queues.containsKey(queueName) && queues.get(queueName) instanceof LeafQueue == true) {
-      throw new IOException("Two leaf queues were named " + queueName
-        + ". Leaf queue names must be distinct");
-    }
-    queues.put(queueName, queue);
-
-    LOG.info("Initialized queue: " + queue);
-    return queue;
-  }
-
-  public synchronized CSQueue getQueue(String queueName) {
-    if (queueName == null) {
-      return null;
-    }
-    return queues.get(queueName);
-  }
 
   private static final String CURRENT_USER_MAPPING = "%user";
 

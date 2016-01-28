@@ -104,6 +104,7 @@ public class CapacitySchedulerConfiguration extends Configuration {
   public static final String DEFAULT_NODE_LABEL_EXPRESSION =
       "default-node-label-expression";
 
+  //yarn.scheduler.capacity.reservations-continue-look-all-nodes
   public static final String RESERVE_CONT_LOOK_ALL_NODES = PREFIX
       + "reservations-continue-look-all-nodes";
   
@@ -157,6 +158,7 @@ public class CapacitySchedulerConfiguration extends Configuration {
   @Private
   public static final String ROOT = "root";
 
+  //yarn.scheduler.capacity.node-locality-delay
   @Private 
   public static final String NODE_LOCALITY_DELAY = 
      PREFIX + "node-locality-delay";
@@ -286,27 +288,29 @@ public class CapacitySchedulerConfiguration extends Configuration {
       boolean useLocalConfigurationProvider) {
     super(configuration);
     if (useLocalConfigurationProvider) {
-      addResource(CS_CONFIGURATION_FILE);
+      addResource(CS_CONFIGURATION_FILE);//加载capacity-scheduler.xml
     }
   }
 
-  //yarn.scheduler.capacity.queue.
+  //yarn.scheduler.capacity.$queue.
   private String getQueuePrefix(String queue) {
     String queueName = PREFIX + queue + DOT;
     return queueName;
   }
   
-  //yarn.scheduler.capacity.queue.accessible-node-labels.label.
+  //yarn.scheduler.capacity.$queue.accessible-node-labels.label.
   private String getNodeLabelPrefix(String queue, String label) {
     return getQueuePrefix(queue) + ACCESSIBLE_NODE_LABELS + DOT + label + DOT;
   }
   
+  //yarn.scheduler.capacity.maximum-applications
   public int getMaximumSystemApplications() {
     int maxApplications = 
       getInt(MAXIMUM_SYSTEM_APPLICATIONS, DEFAULT_MAXIMUM_SYSTEM_APPLICATIIONS);
     return maxApplications;
   }
   
+  //yarn.scheduler.capacity.maximum-am-resource-percent
   public float getMaximumApplicationMasterResourcePercent() {
     return getFloat(MAXIMUM_APPLICATION_MASTERS_RESOURCE_PERCENT, 
         DEFAULT_MAXIMUM_APPLICATIONMASTERS_RESOURCE_PERCENT);
@@ -319,6 +323,7 @@ public class CapacitySchedulerConfiguration extends Configuration {
    * @return setting specified or -1 if not set
    */
   public int getMaximumApplicationsPerQueue(String queue) {
+	  //yarn.scheduler.capacity.$queue.maximum-applications
     int maxApplicationsPerQueue = 
       getInt(getQueuePrefix(queue) + MAXIMUM_APPLICATIONS_SUFFIX, 
           (int)UNDEFINED);
@@ -332,17 +337,18 @@ public class CapacitySchedulerConfiguration extends Configuration {
    *         setting if per queue setting not present
    */
   public float getMaximumApplicationMasterResourcePerQueuePercent(String queue) {
+	//yarn.scheduler.capacity.$queue.maximum-am-resource-percent
     return getFloat(getQueuePrefix(queue) + MAXIMUM_AM_RESOURCE_SUFFIX, 
-    		getMaximumApplicationMasterResourcePercent());
+    		getMaximumApplicationMasterResourcePercent());//默认是yarn.scheduler.capacity.maximum-am-resource-percent
   }
   
   /**
    * 获取配置文件中配置该队列的容量 
    */
   public float getCapacity(String queue) {
-    //yarn.scheduler.capacity.queue.capacity
+    //yarn.scheduler.capacity.$queue.capacity
     float capacity = queue.equals("root") ? 100.0f : getFloat(getQueuePrefix(queue) + CAPACITY, UNDEFINED);
-    if (capacity < MINIMUM_CAPACITY_VALUE || capacity > MAXIMUM_CAPACITY_VALUE) {
+    if (capacity < MINIMUM_CAPACITY_VALUE || capacity > MAXIMUM_CAPACITY_VALUE) {//该值在0-100之间
       throw new IllegalArgumentException("Illegal " +
       		"capacity of " + capacity + " for queue " + queue);
     }
@@ -356,14 +362,15 @@ public class CapacitySchedulerConfiguration extends Configuration {
       throw new IllegalArgumentException(
           "Cannot set capacity, root queue has a fixed capacity of 100.0f");
     }
+    //yarn.scheduler.capacity.$queue.capacity
     setFloat(getQueuePrefix(queue) + CAPACITY, capacity);
     LOG.debug("CSConf - setCapacity: queuePrefix=" + getQueuePrefix(queue) + 
         ", capacity=" + capacity);
   }
 
-  //yarn.scheduler.capacity.queue.maximum-capacity该队列的最大capacity
   public float getMaximumCapacity(String queue) {
     //获取该队列的最大capacity
+	//yarn.scheduler.capacity.$queue.maximum-capacity该队列的最大capacity
     float maxCapacity = getFloat(getQueuePrefix(queue) + MAXIMUM_CAPACITY, MAXIMUM_CAPACITY_VALUE);
     maxCapacity = (maxCapacity == DEFAULT_MAXIMUM_CAPACITY_VALUE) ? MAXIMUM_CAPACITY_VALUE : maxCapacity; 
     return maxCapacity;
@@ -374,44 +381,50 @@ public class CapacitySchedulerConfiguration extends Configuration {
       throw new IllegalArgumentException("Illegal " +
           "maximum-capacity of " + maxCapacity + " for queue " + queue);
     }
+    //yarn.scheduler.capacity.$queue.maximum-capacity
     setFloat(getQueuePrefix(queue) + MAXIMUM_CAPACITY, maxCapacity);
     LOG.debug("CSConf - setMaxCapacity: queuePrefix=" + getQueuePrefix(queue) + 
         ", maxCapacity=" + maxCapacity);
   }
   
+  //yarn.scheduler.capacity.$queue.accessible-node-labels.label.capacity
   public void setCapacityByLabel(String queue, String label, float capacity) {
     setFloat(getNodeLabelPrefix(queue, label) + CAPACITY, capacity);
   }
   
+  //yarn.scheduler.capacity.$queue.accessible-node-labels.label.maximum-capacity
   public void setMaximumCapacityByLabel(String queue, String label,
       float capacity) {
     setFloat(getNodeLabelPrefix(queue, label) + MAXIMUM_CAPACITY, capacity);
   }
   
+  //yarn.scheduler.capacity.$queue.minimum-user-limit-percent
   public int getUserLimit(String queue) {
     int userLimit = getInt(getQueuePrefix(queue) + USER_LIMIT,
         DEFAULT_USER_LIMIT);
     return userLimit;
   }
 
+  //yarn.scheduler.capacity.$queue.minimum-user-limit-percent
   public void setUserLimit(String queue, int userLimit) {
     setInt(getQueuePrefix(queue) + USER_LIMIT, userLimit);
     LOG.debug("here setUserLimit: queuePrefix=" + getQueuePrefix(queue) + 
         ", userLimit=" + getUserLimit(queue));
   }
   
+  //yarn.scheduler.capacity.$queue.user-limit-factor
   public float getUserLimitFactor(String queue) {
     float userLimitFactor = 
       getFloat(getQueuePrefix(queue) + USER_LIMIT_FACTOR, 
           DEFAULT_USER_LIMIT_FACTOR);
     return userLimitFactor;
   }
-
+  //yarn.scheduler.capacity.$queue.user-limit-factor
   public void setUserLimitFactor(String queue, float userLimitFactor) {
     setFloat(getQueuePrefix(queue) + USER_LIMIT_FACTOR, userLimitFactor); 
   }
   
-  //yarn.scheduler.capacity.queue.state
+  //yarn.scheduler.capacity.$queue.state
   public QueueState getState(String queue) {
     String state = get(getQueuePrefix(queue) + STATE);
     return (state != null) ? 
@@ -423,10 +436,13 @@ public class CapacitySchedulerConfiguration extends Configuration {
       return;
     }
     String str = StringUtils.join(",", labels);
+    //yarn.scheduler.capacity.$queue.accessible-node-labels
     set(getQueuePrefix(queue) + ACCESSIBLE_NODE_LABELS, str);
   }
   
   public Set<String> getAccessibleNodeLabels(String queue) {
+	  
+	//yarn.scheduler.capacity.$queue.accessible-node-labels
     String accessibleLabelStr =
         get(getQueuePrefix(queue) + ACCESSIBLE_NODE_LABELS);
 
@@ -476,6 +492,8 @@ public class CapacitySchedulerConfiguration extends Configuration {
 
     for (String label : labels.contains(CommonNodeLabelsManager.ANY) ? mgr
         .getClusterNodeLabels() : labels) {
+     
+      //yarn.scheduler.capacity.$queue.accessible-node-labels.label.capacity
       String capacityPropertyName = getNodeLabelPrefix(queue, label) + CAPACITY;
       float capacity = getFloat(capacityPropertyName, 0f);
       if (capacity < MINIMUM_CAPACITY_VALUE
@@ -503,6 +521,8 @@ public class CapacitySchedulerConfiguration extends Configuration {
 
     for (String label : labels.contains(CommonNodeLabelsManager.ANY) ? mgr
         .getClusterNodeLabels() : labels) {
+    	
+      //yarn.scheduler.capacity.$queue.accessible-node-labels.label.maximum-capacity
       float maxCapacity =
           getFloat(getNodeLabelPrefix(queue, label) + MAXIMUM_CAPACITY,
               100f);
@@ -519,10 +539,12 @@ public class CapacitySchedulerConfiguration extends Configuration {
     return maximumNodeLabelCapacities;
   }
   
+  //yarn.scheduler.capacity.$queue.default-node-label-expression
   public String getDefaultNodeLabelExpression(String queue) {
     return get(getQueuePrefix(queue) + DEFAULT_NODE_LABEL_EXPRESSION);
   }
   
+  //yarn.scheduler.capacity.$queue.default-node-label-expression
   public void setDefaultNodeLabelExpression(String queue, String exp) {
     set(getQueuePrefix(queue) + DEFAULT_NODE_LABEL_EXPRESSION, exp);
   }
@@ -534,6 +556,7 @@ public class CapacitySchedulerConfiguration extends Configuration {
    * reservation to be fullfilled.  This config is refreshable.
    */
   public boolean getReservationContinueLook() {
+	//yarn.scheduler.capacity.reservations-continue-look-all-nodes
     return getBoolean(RESERVE_CONT_LOOK_ALL_NODES,
         DEFAULT_RESERVE_CONT_LOOK_ALL_NODES);
   }
@@ -549,10 +572,12 @@ public class CapacitySchedulerConfiguration extends Configuration {
    * 通过队列和权限,获取使用该权限的用户和用户组信息
    */
   public AccessControlList getAcl(String queue, QueueACL acl) {
+	//yarn.scheduler.capacity.$queue.
     String queuePrefix = getQueuePrefix(queue);
     // The root queue defaults to all access if not defined
     // Sub queues inherit access if not defined
     String defaultAcl = queue.equals(ROOT) ? ALL_ACL : NONE_ACL;
+    //yarn.scheduler.capacity.$queue.acl_$xxxx
     String aclString = get(queuePrefix + getAclKey(acl), defaultAcl);
     return new AccessControlList(aclString);
   }
@@ -561,8 +586,9 @@ public class CapacitySchedulerConfiguration extends Configuration {
    * 为某一个队列、权限,设置权限组
    */
   public void setAcl(String queue, QueueACL acl, String aclString) {
+	//yarn.scheduler.capacity.$queue.
     String queuePrefix = getQueuePrefix(queue);
-    //设置属性yarn.scheduler.capacity.queue.acl_QueueACL
+    //设置属性yarn.scheduler.capacity.$queue.acl_$xxxx
     set(queuePrefix + getAclKey(acl), aclString);
   }
 
@@ -593,7 +619,7 @@ public class CapacitySchedulerConfiguration extends Configuration {
    */
   public String[] getQueues(String queue) {
     LOG.debug("CSConf - getQueues called for: queuePrefix=" + getQueuePrefix(queue));
-    //查找yarn.scheduler.capacity.queue.queues配置数组集合
+    //yarn.scheduler.capacity.$queue.queues
     String[] queues = getStrings(getQueuePrefix(queue) + QUEUES);
     LOG.debug("CSConf - getQueues: queuePrefix=" + getQueuePrefix(queue) + 
         ", queues=" + ((queues == null) ? "" : StringUtils.arrayToString(queues)));
@@ -601,9 +627,10 @@ public class CapacitySchedulerConfiguration extends Configuration {
   }
   
   /**
-   * 为yarn.scheduler.capacity.queue.queues设置数组集合,表示queue下的子节点集合
+   * yarn.scheduler.capacity.$queue.queues设置数组集合,表示queue下的子节点集合
    */
   public void setQueues(String queue, String[] subQueues) {
+	//yarn.scheduler.capacity.$queue.queues
     set(getQueuePrefix(queue) + QUEUES, StringUtils.arrayToString(subQueues));
     LOG.debug("CSConf - setQueues: qPrefix=" + getQueuePrefix(queue) + 
         ", queues=" + StringUtils.arrayToString(subQueues));
@@ -637,9 +664,11 @@ public class CapacitySchedulerConfiguration extends Configuration {
 
   //获取该队列是否启动统计功能
   public boolean getEnableUserMetrics() {
+	//yarn.scheduler.capacity.user-metrics.enable
     return getBoolean(ENABLE_USER_METRICS, DEFAULT_ENABLE_USER_METRICS);
   }
 
+  //yarn.scheduler.capacity.node-locality-delay
   public int getNodeLocalityDelay() {
     int delay = getInt(NODE_LOCALITY_DELAY, DEFAULT_NODE_LOCALITY_DELAY);
     return (delay == DEFAULT_NODE_LOCALITY_DELAY) ? 0 : delay;
@@ -649,6 +678,7 @@ public class CapacitySchedulerConfiguration extends Configuration {
    * 获取资源计算器
    */
   public ResourceCalculator getResourceCalculator() {
+	  //yarn.scheduler.capacity.resource-calculator
     return ReflectionUtils.newInstance(
         getClass(
             RESOURCE_CALCULATOR_CLASS, 
@@ -662,6 +692,7 @@ public class CapacitySchedulerConfiguration extends Configuration {
         YarnConfiguration.DEFAULT_RM_SCHEDULER_USE_PORT_FOR_NODE_NAME);
   }
 
+  //yarn.scheduler.capacity.resource-calculator
   public void setResourceComparator(
       Class<? extends ResourceCalculator> resourceCalculatorClass) {
     setClass(
@@ -670,17 +701,20 @@ public class CapacitySchedulerConfiguration extends Configuration {
         ResourceCalculator.class);
   }
 
+  //yarn.scheduler.capacity.schedule-asynchronously.enable
   public boolean getScheduleAynschronously() {
     return getBoolean(SCHEDULE_ASYNCHRONOUSLY_ENABLE,
       DEFAULT_SCHEDULE_ASYNCHRONOUSLY_ENABLE);
   }
 
+  //yarn.scheduler.capacity.schedule-asynchronously.enable
   public void setScheduleAynschronously(boolean async) {
     setBoolean(SCHEDULE_ASYNCHRONOUSLY_ENABLE, async);
   }
 
   /**
    * 是否启动user、group映射到组特性
+   * yarn.scheduler.capacity.queue-mappings-override.enable
    */
   public boolean getOverrideWithQueueMappings() {
     return getBoolean(ENABLE_QUEUE_MAPPING_OVERRIDE,
@@ -720,6 +754,7 @@ public class CapacitySchedulerConfiguration extends Configuration {
    */
   public List<QueueMapping> getQueueMappings() {
     List<QueueMapping> mappings = new ArrayList<CapacitySchedulerConfiguration.QueueMapping>();
+    //yarn.scheduler.capacity.queue-mappings
     Collection<String> mappingsString = getTrimmedStringCollection(QUEUE_MAPPING);
     for (String mappingValue : mappingsString) {
       //字符串按照:拆分成数组,数据源格式:MappingType:source:queue
@@ -760,17 +795,19 @@ public class CapacitySchedulerConfiguration extends Configuration {
    * 该队列是否支持预约
    */
   public boolean isReservable(String queue) {
-    //yarn.scheduler.capacity.queue.reservable配置属性是否为true
+    //yarn.scheduler.capacity.$queue.reservable
     boolean isReservable = getBoolean(getQueuePrefix(queue) + IS_RESERVABLE, false);
     return isReservable;
   }
 
+  //yarn.scheduler.capacity.$queue.reservable
   public void setReservable(String queue, boolean isReservable) {
     setBoolean(getQueuePrefix(queue) + IS_RESERVABLE, isReservable);
     LOG.debug("here setReservableQueue: queuePrefix=" + getQueuePrefix(queue)
         + ", isReservableQueue=" + isReservable(queue));
   }
 
+  //yarn.scheduler.capacity.$queue.reservation-window
   public long getReservationWindow(String queue) {
     long reservationWindow =
         getLong(getQueuePrefix(queue) + RESERVATION_WINDOW,
@@ -778,6 +815,7 @@ public class CapacitySchedulerConfiguration extends Configuration {
     return reservationWindow;
   }
 
+  //yarn.scheduler.capacity.$queue.average-capacity
   public float getAverageCapacity(String queue) {
     float avgCapacity =
         getFloat(getQueuePrefix(queue) + AVERAGE_CAPACITY,
@@ -785,6 +823,7 @@ public class CapacitySchedulerConfiguration extends Configuration {
     return avgCapacity;
   }
 
+  //yarn.scheduler.capacity.$queue.instantaneous-max-capacity
   public float getInstantaneousMaxCapacity(String queue) {
     float instMaxCapacity =
         getFloat(getQueuePrefix(queue) + INSTANTANEOUS_MAX_CAPACITY,
@@ -792,19 +831,23 @@ public class CapacitySchedulerConfiguration extends Configuration {
     return instMaxCapacity;
   }
 
+  //yarn.scheduler.capacity.$queue.instantaneous-max-capacity
   public void setInstantaneousMaxCapacity(String queue, float instMaxCapacity) {
     setFloat(getQueuePrefix(queue) + INSTANTANEOUS_MAX_CAPACITY,
         instMaxCapacity);
   }
 
+  //yarn.scheduler.capacity.$queue.reservation-window
   public void setReservationWindow(String queue, long reservationWindow) {
     setLong(getQueuePrefix(queue) + RESERVATION_WINDOW, reservationWindow);
   }
 
+  //yarn.scheduler.capacity.$queue.average-capacity
   public void setAverageCapacity(String queue, float avgCapacity) {
     setFloat(getQueuePrefix(queue) + AVERAGE_CAPACITY, avgCapacity);
   }
 
+  //yarn.scheduler.capacity.$queue.reservation-policy
   public String getReservationAdmissionPolicy(String queue) {
     String reservationPolicy =
         get(getQueuePrefix(queue) + RESERVATION_ADMISSION_POLICY,
@@ -812,11 +855,13 @@ public class CapacitySchedulerConfiguration extends Configuration {
     return reservationPolicy;
   }
 
+  //yarn.scheduler.capacity.$queue.reservation-policy
   public void setReservationAdmissionPolicy(String queue,
       String reservationPolicy) {
     set(getQueuePrefix(queue) + RESERVATION_ADMISSION_POLICY, reservationPolicy);
   }
 
+  //yarn.scheduler.capacity.$queue.reservation-agent
   public String getReservationAgent(String queue) {
     String reservationAgent =
         get(getQueuePrefix(queue) + RESERVATION_AGENT_NAME,
@@ -824,10 +869,12 @@ public class CapacitySchedulerConfiguration extends Configuration {
     return reservationAgent;
   }
 
+  //yarn.scheduler.capacity.$queue.reservation-agent
   public void setReservationAgent(String queue, String reservationPolicy) {
     set(getQueuePrefix(queue) + RESERVATION_AGENT_NAME, reservationPolicy);
   }
 
+  //yarn.scheduler.capacity.$queue.show-reservations-as-queues
   public boolean getShowReservationAsQueues(String queuePath) {
     boolean showReservationAsQueues =
         getBoolean(getQueuePrefix(queuePath)
@@ -835,6 +882,7 @@ public class CapacitySchedulerConfiguration extends Configuration {
     return showReservationAsQueues;
   }
 
+  //yarn.scheduler.capacity.$queue.reservation-planner
   public String getReplanner(String queue) {
     String replanner =
         get(getQueuePrefix(queue) + RESERVATION_PLANNER_NAME,
@@ -842,6 +890,7 @@ public class CapacitySchedulerConfiguration extends Configuration {
     return replanner;
   }
 
+  //yarn.scheduler.capacity.$queue.reservation-move-on-expiry
   public boolean getMoveOnExpiry(String queue) {
     boolean killOnExpiry =
         getBoolean(getQueuePrefix(queue) + RESERVATION_MOVE_ON_EXPIRY,
@@ -849,6 +898,7 @@ public class CapacitySchedulerConfiguration extends Configuration {
     return killOnExpiry;
   }
 
+  //yarn.scheduler.capacity.$queue.reservation-enforcement-window
   public long getEnforcementWindow(String queue) {
     long enforcementWindow =
         getLong(getQueuePrefix(queue) + RESERVATION_ENFORCEMENT_WINDOW,
