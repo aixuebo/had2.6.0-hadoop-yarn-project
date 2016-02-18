@@ -47,8 +47,8 @@ public interface Queue {
 
   /**
    * Get queue information 返回当前队列的基础信息
-   * @param includeChildQueues include child queues? 返回的信息是否包含子队列
-   * @param recursive recursively get child queue information? 是否递归循环子队列信息
+   * @param includeChildQueues include child queues? true表示要添加子队列的信息
+   * @param recursive recursively get child queue information? 表示获取子队列信息的时候是否要获取孙子辈的信息
    * @return queue information
    */
   QueueInfo getQueueInfo(boolean includeChildQueues, boolean recursive);

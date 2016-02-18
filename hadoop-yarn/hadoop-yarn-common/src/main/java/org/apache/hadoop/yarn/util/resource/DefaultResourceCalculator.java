@@ -25,24 +25,28 @@ import org.apache.hadoop.yarn.api.records.Resource;
 @Unstable
 public class DefaultResourceCalculator extends ResourceCalculator {
   
+	//仅仅比较内存大小
   @Override
   public int compare(Resource unused, Resource lhs, Resource rhs) {
     // Only consider memory
     return lhs.getMemory() - rhs.getMemory();
   }
 
+  //返回左边的内存能容纳多少个右边的内存资源
   @Override
   public int computeAvailableContainers(Resource available, Resource required) {
     // Only consider memory
     return available.getMemory() / required.getMemory();
   }
 
+  //numerator.getMemory() / denominator.getMemory()
   @Override
   public float divide(Resource unused, 
       Resource numerator, Resource denominator) {
     return ratio(numerator, denominator);
   }
   
+  //true表示蚕食的内存是0,是不允许进行除法运算的
   public boolean isInvalidDivisor(Resource r) {
     if (r.getMemory() == 0.0f) {
       return true;
@@ -55,20 +59,28 @@ public class DefaultResourceCalculator extends ResourceCalculator {
     return (float)a.getMemory() / b.getMemory();
   }
 
+  /**
+   * 内存相除之后,向上取整,表示会最终多获取一个资源
+   */
   @Override
   public Resource divideAndCeil(Resource numerator, int denominator) {
     return Resources.createResource(
         divideAndCeil(numerator.getMemory(), denominator));
   }
 
+  /**
+   * 格式化内存,无论r给的空间有多大,都能保证
+   * minimumResource<r<maximumResource
+   * 并且r最终的内存大小是比最终的多一些,一些取决于stepFactor的资源大小
+   */
   @Override
   public Resource normalize(Resource r, Resource minimumResource,
       Resource maximumResource, Resource stepFactor) {
     int normalizedMemory = Math.min(
         roundUp(
-            Math.max(r.getMemory(), minimumResource.getMemory()),
+            Math.max(r.getMemory(), minimumResource.getMemory()),//约束需要的资源最少也得是minimumResource资源
             stepFactor.getMemory()),
-            maximumResource.getMemory());
+            maximumResource.getMemory());//约束需要的资源最多是maximumResource资源
     return Resources.createResource(normalizedMemory);
   }
 
@@ -78,6 +90,9 @@ public class DefaultResourceCalculator extends ResourceCalculator {
     return normalize(r, minimumResource, maximumResource, minimumResource);
   }
 
+  /**
+   * 最终让r的资源略大一部分,略大的范围是stepFactor的内存大小范围
+   */
   @Override
   public Resource roundUp(Resource r, Resource stepFactor) {
     return Resources.createResource(
@@ -85,12 +100,18 @@ public class DefaultResourceCalculator extends ResourceCalculator {
         );
   }
 
+  /**
+   * 最终让r的资源略小一部分,略小的范围是stepFactor的内存大小范围
+   */
   @Override
   public Resource roundDown(Resource r, Resource stepFactor) {
     return Resources.createResource(
         roundDown(r.getMemory(), stepFactor.getMemory()));
   }
 
+  /**
+   * 使r资源内存增加by倍,然后再提升略大一些内存,略大的内存范围取决于stepFactor的内存大小
+   */
   @Override
   public Resource multiplyAndNormalizeUp(Resource r, double by,
       Resource stepFactor) {
@@ -99,6 +120,9 @@ public class DefaultResourceCalculator extends ResourceCalculator {
         );
   }
 
+  /**
+   * 使r资源内存增加by倍,然后再降低略小一些内存,略小的内存范围取决于stepFactor的内存大小
+   */
   @Override
   public Resource multiplyAndNormalizeDown(Resource r, double by,
       Resource stepFactor) {

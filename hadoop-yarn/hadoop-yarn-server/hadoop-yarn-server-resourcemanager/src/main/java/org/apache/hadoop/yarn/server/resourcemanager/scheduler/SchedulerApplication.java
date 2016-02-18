@@ -21,6 +21,9 @@ import org.apache.hadoop.classification.InterfaceAudience.Private;
 import org.apache.hadoop.classification.InterfaceStability.Unstable;
 import org.apache.hadoop.yarn.server.resourcemanager.rmapp.RMAppState;
 
+/**
+ * 代表一个调度的应用,一个app对应一个该对象
+ */
 @Private
 @Unstable
 public class SchedulerApplication<T extends SchedulerApplicationAttempt> {

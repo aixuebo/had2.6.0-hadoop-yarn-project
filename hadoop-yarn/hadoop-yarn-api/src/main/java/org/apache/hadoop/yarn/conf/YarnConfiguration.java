@@ -157,20 +157,30 @@ public class YarnConfiguration extends Configuration {
 
   /** Miniumum request grant-able by the RM scheduler. 
    *  表示一个NodeManager节点最小要提供的内存总资源也不能小于此值
+   *  yarn.scheduler.minimum-allocation-mb
    **/
   public static final String RM_SCHEDULER_MINIMUM_ALLOCATION_MB =
     YARN_PREFIX + "scheduler.minimum-allocation-mb";
   public static final int DEFAULT_RM_SCHEDULER_MINIMUM_ALLOCATION_MB = 1024;
   
-  //表示一个NodeManager节点最小要提供的CPU总资源也不能小于此值
+  /**
+   * yarn.scheduler.minimum-allocation-vcores
+   * 表示一个NodeManager节点最小要提供的CPU总资源也不能小于此值
+   */
   public static final String RM_SCHEDULER_MINIMUM_ALLOCATION_VCORES =
       YARN_PREFIX + "scheduler.minimum-allocation-vcores";
     public static final int DEFAULT_RM_SCHEDULER_MINIMUM_ALLOCATION_VCORES = 1;
 
-  /** Maximum request grant-able by the RM scheduler. */
+  /** Maximum request grant-able by the RM scheduler.
+   * yarn.scheduler.maximum-allocation-mb 表示一个RM申请的最大的内存量 
+   **/
   public static final String RM_SCHEDULER_MAXIMUM_ALLOCATION_MB =
     YARN_PREFIX + "scheduler.maximum-allocation-mb";
   public static final int DEFAULT_RM_SCHEDULER_MAXIMUM_ALLOCATION_MB = 8192;
+  
+  /**
+   * yarn.scheduler.maximum-allocation-vcores 表示一个RM申请的最大的CPU
+   */
   public static final String RM_SCHEDULER_MAXIMUM_ALLOCATION_VCORES =
       YARN_PREFIX + "scheduler.maximum-allocation-vcores";
   public static final int DEFAULT_RM_SCHEDULER_MAXIMUM_ALLOCATION_VCORES = 4;
@@ -1465,24 +1475,32 @@ public class YarnConfiguration extends Configuration {
   public static final long DEFAULT_CLIENT_NM_CONNECT_RETRY_INTERVAL_MS
       = 10 * 1000;
 
+  //yarn.http.policy
   public static final String YARN_HTTP_POLICY_KEY = YARN_PREFIX + "http.policy";
   public static final String YARN_HTTP_POLICY_DEFAULT = HttpConfig.Policy.HTTP_ONLY
       .name();
   
+  //yarn.node-labels.
   public static final String NODE_LABELS_PREFIX = YARN_PREFIX + "node-labels.";
 
   /**
    * Class for RMNodeLabelsManager Please note this value should be consistent
    * in client nodes and RM node(s)
+   * yarn.node-labels.manager-class
    */
   public static final String RM_NODE_LABELS_MANAGER_CLASS = NODE_LABELS_PREFIX
       + "manager-class";
   
-  /** URI for NodeLabelManager */
+  /** URI for NodeLabelManager 
+   * yarn.node-labels.fs-store.root-dir 标签存储的目录
+   **/
   public static final String FS_NODE_LABELS_STORE_ROOT_DIR = NODE_LABELS_PREFIX
       + "fs-store.root-dir";
+  
+  //yarn.node-labels.fs-store.retry-policy-spec
   public static final String FS_NODE_LABELS_STORE_RETRY_POLICY_SPEC =
       NODE_LABELS_PREFIX + "fs-store.retry-policy-spec";
+  
   public static final String DEFAULT_FS_NODE_LABELS_STORE_RETRY_POLICY_SPEC =
       "2000, 500";
 

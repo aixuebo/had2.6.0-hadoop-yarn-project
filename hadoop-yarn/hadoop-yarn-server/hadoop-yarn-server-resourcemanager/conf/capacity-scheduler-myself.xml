@@ -6,17 +6,194 @@
     <description>
       	描述该队列的所有子队列名称集合
     </description>
-    
+  </property>
+
+  <property>
     <name>yarn.scheduler.capacity.$queue.reservable</name>
     <value>true</value>
     <description>
       	该队列是否支持预约
     </description>
+  </property>
     
+  <property>
+    <name>yarn.scheduler.capacity.$queue.accessible-node-labels</name>
+    <value>label1,label2,label3</value>
+    <description>
+      	设置该queue对应的标签集合,如果该标签中包含*,则其他非*的自动删除
+    </description>
+  </property>
+    
+  <property>
+    <name>yarn.scheduler.capacity.$queue.accessible-node-labels.$label.capacity</name>
+    <value>50</value>
+    <description>
+      	表示调度队列queue上每一个label对应的容量,内容是0-100之间的数字,表示占用的百分比,使用的时候是使用百分比
+    </description>
+  </property>
+  
+  <property>
+    <name>yarn.scheduler.capacity.$queue.accessible-node-labels.$label.maximum-capacity</name>
+    <value></value>
+    <description>
+      	表示调度队列queue上每一个label对应的最大容量,内容是0-100之间的数字,表示占用的百分比,使用的时候是使用百分比
+    </description>
+  </property>
+  
+  <property>
+    <name>yarn.scheduler.capacity.$queue.default-node-label-expression</name>
+    <value>label1,label2,label3</value>
+    <description>
+      	设置该queue对应的默认标签集合
+    </description>
+  </property>
+
+
+  <property>
+    <name>yarn.scheduler.capacity.$queue.state</name>
+    <value>STOPPED</value>
+    <description>
+      	设置该queue的状态,STOPPED或者RUNNING,只有该队列是RUNNING的时候才允许运行任务,并且父类也都得是RUNNING状态才允许运行任务
+    </description>
+  </property>
+    
+  <property>
+    <name>yarn.scheduler.capacity.$queue.capacity</name>
+    <value>50</value>
+    <description>
+      	设置的是0-100之间的数字,表示该队列的占比,比如设置为50,则表示占比50,比如该队列还有子队列,设置为30,则表示子队列的资源使用为总资源*50%*30%
+      	注意根一定是设置为100
+    </description>
+  </property>
+  
+  <property>
+    <name>yarn.scheduler.capacity.$queue.maximum-capacity</name>
+    <value>50</value>
+    <description>
+      	设置的是0-100之间的数字,表示该队列的占比的最大值,比如设置为50,则表示占比最多为50,比如该队列还有子队列,设置为30,则表示子队列的资源使用为总资源*50%*30%
+      	注意:默认是100,如果设置为-1,也表示为100
+    </description>
+  </property>
+  
+<!-- 叶子节点 -->
+
+  <property>
+    <name>yarn.scheduler.capacity.$queue.maximum-applications</name>
+    <value>1</value>
+    <description>
+      	整数,默认是-1,表示最多该队列上可以存储多少个app
+      	注意:如果是-1,则首先获取全局的最多允许多少个app,即yarn.scheduler.capacity.maximum-applications,然后根据absoluteCapacity的真实比例 * yarn.scheduler.capacity.maximum-applications 运算获取该队列上存储最多多少个app
+    </description>
+  </property>
+  
+  <property>
+    <name>yarn.scheduler.capacity.$queue.minimum-user-limit-percent</name>
+    <value>100</value>
+    <description>
+                            用于确定该队列上每一个用户最多允许分配多少个应用
+      	整数,默认是100
+      	公式是maxApplications * (userLimit / 100.0f) * userLimitFactor
+      	由此可见,userLimit表示百分比,大于100是不现实的，因为比如userLimit=200,则200/100 =2,表示该一个用户可以沾满整个队列的2倍,因此应该是100以内,表示百分比,比如50,表示一个用户可以使用最多50%的应用都由一个用户占满,不过由于userLimitFactor因此也可以随意调节,正负都可以,则该userLimit值也可以是很大的值,使用的时候根据公式自己算吧
+    </description>
+  </property>
+  
+  <property>
+    <name>yarn.scheduler.capacity.$queue.user-limit-factor</name>
+    <value>1.0</value>
+    <description>
+                            用于确定该队列上每一个用户最多允许分配多少个应用
+      	浮点数,默认是1.0f
+      	公式是:maxApplications * (userLimit / 100.0f) * userLimitFactor
+      	由此可见,userLimit表示百分比,大于100是不现实的，因为比如userLimit=200,则200/100 =2,表示该一个用户可以沾满整个队列的2倍,因此应该是100以内,表示百分比,比如50,表示一个用户可以使用最多50%的应用都由一个用户占满,不过由于userLimitFactor因此也可以随意调节,正负都可以,则该userLimit值也可以是很大的值,使用的时候根据公式自己算吧
+    </description>
+  </property>
+  
+   <property>
+    <name>yarn.scheduler.capacity.$queue.maximum-am-resource-percent</name>
+    <value>0.5</value>
+    <description>
+      	浮点数,默认是yarn.scheduler.capacity.maximum-am-resource-percent对应的值,即0.1f
+      	用于配置叶子节点时候,配置每一个队列上最多允许多少个活跃的app执行
+    </description>
+  </property>
+  
+  
+<!-- 全局 -->
+  <property>
+    <name>yarn.scheduler.capacity.queue-mappings-override.enable</name>
+    <value>true</value>
+    <description>
+      	是否启动user、group映射到组特性
+    </description>
+  </property>
+
+  <property>
+    <name>yarn.scheduler.capacity.queue-mappings</name>
+    <value>MappingType:source:queue,MappingType:source:queue</value>
+    <description>
+                           表示获取每一个user或者group对应使用哪个队列
+      	用逗号拆分,其中MappingType用u,g表示,分别表示user和group
+      	source表示组名字或者user名字,表示该名字映射到哪个队列中
+      	
+      	注意:queue必须对应的是叶子节点
+    </description>
+  </property>
+  
+ <property>
+    <name>yarn.scheduler.capacity.maximum-applications</name>
+    <value>1</value>
+    <description>
+      	整数,默认是10000,系统默认最多允许多少个app在执行或者等待
+    </description>
   </property>
 </configuration>
 
+ <property>
+    <name>yarn.scheduler.capacity.maximum-am-resource-percent</name>
+    <value>0.5</value>
+    <description>
+        用于配置叶子节点时候,配置每一个队列上最多允许多少个活跃的app执行
+      	浮点数,默认是0.1f
+    </description>
+  </property>
+  
+ <property>
+    <name>yarn.scheduler.capacity.node-locality-delay</name>
+    <value>-1</value>
+    <description>
+      	整数,默认是-1
+    </description>
+  </property>
+  
+ <property>
+    <name>yarn.scheduler.capacity.reservations-continue-look-all-nodes</name>
+    <value>false</value>
+    <description>
+      	boolean类型,默认是true
+    </description>
+  </property>
 
+注意:
+  在AbstractCSQueue类中字段含义
+    <name>yarn.scheduler.capacity.$queue.capacity</name>根的时候设置为100,表示百分比,即100%
+    1.capacity 就是100%,即1,因此0<capacity<1,该值仅仅表示为该队列在父队列的基础上的占比,配置文件中设置多少就是多少
+    2.maximumCapacity 与capacity含义一致,就是配置文件中原始的配置元素的百分比,即如果配置为50,则该值表示50%,即0.5
+    3.absoluteCapacity,表示绝对的capacity ,因此该值会根据父队列占总资源的capacity进行分配,
+                 比如:设置为50,则表示占比50,比如该队列还有子队列,设置为30,则表示子队列的资源使用为总资源*50%*30%
+    4.absoluteMaxCapacity 与absoluteCapacity含义一致,但是表示该队列最多允许分配的资源占比量
+    5.capacitiyByNodeLabels,是yarn.scheduler.capacity.$queue.accessible-node-labels.$label.capacity对应的值/100,即百分比
+    6.maxCapacityByNodeLabels,是yarn.scheduler.capacity.$queue.accessible-node-labels.$label.maximum-capacity对应的值/100,即百分比
+    
+    //根据上面两个参数进行计算获取以下两个参数值
+    7.absoluteCapacityByNodeLabels,该值与capacitiyByNodeLabels向关联,获取最终的具体label所占用比例,可以参见absoluteCapacity
+    8.absoluteMaxCapacityByNodeLabels,该值与maxCapacityByNodeLabels向关联,获取最终的具体label所占用最大比例,可以参见absoluteMaxCapacity
+    
+    9.usedResources该队列已经使用的资源情况
+    10.Map<String, Resource> usedResourcesByNodeLabels,key是该队列中的每一个标签label,value是该标签对应的资源已经使用的情况
+    11.usedCapacity,该队列真正已经使用的占比,公式:usedResources/(clusterResource*childQueue.getAbsoluteCapacity(),翻译 已经使用的资源量/该队列分配的capacity量,即就是该队列的使用百分比
+    12.absoluteUsedCapacity,公式:usedResources/clusterResource,即该队列已经使用的资源占总资源的比例
+
+    
 说明；
 1.支持预约,则是PlanQueue对象,仅仅是叶子节点支持预约,父节点则抛异常
 2.不支持预约,则是LeafQueue
@@ -36,26 +213,11 @@ yarn.scheduler.capacity.$queue.reservation-enforcement-window
 yarn.scheduler.capacity.$queue.instantaneous-max-capacity
 yarn.scheduler.capacity.$queue.acl_$xxxx
 yarn.scheduler.capacity.$queue.average-capacity
-yarn.scheduler.capacity.$queue.accessible-node-labels
-yarn.scheduler.capacity.$queue.accessible-node-labels.label.capacity
-yarn.scheduler.capacity.$queue.accessible-node-labels.label.maximum-capacity
-yarn.scheduler.capacity.$queue.default-node-label-expression
-yarn.scheduler.capacity.$queue.maximum-applications
-yarn.scheduler.capacity.$queue.maximum-am-resource-percent
-yarn.scheduler.capacity.$queue.maximum-capacity
-yarn.scheduler.capacity.$queue.minimum-user-limit-percent
-yarn.scheduler.capacity.$queue.capacity
-yarn.scheduler.capacity.$queue.user-limit-factor
-yarn.scheduler.capacity.$queue.state
 yarn.scheduler.capacity.$queue.show-reservations-as-queues
 
 全局标签
-yarn.scheduler.capacity.maximum-am-resource-percent
-yarn.scheduler.capacity.maximum-applications
 yarn.scheduler.capacity.user-metrics.enable
-yarn.scheduler.capacity.node-locality-delay
-yarn.scheduler.capacity.resource-calculator
 yarn.scheduler.capacity.schedule-asynchronously.enable
-yarn.scheduler.capacity.queue-mappings-override.enable
-yarn.scheduler.capacity.queue-mappings
 yarn.scheduler.capacity.schedule-asynchronously.scheduling-interval-ms
+yarn.scheduler.capacity.resource-calculator 资源调度器,这个基本上不用改变
+

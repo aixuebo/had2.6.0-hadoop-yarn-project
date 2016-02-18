@@ -80,28 +80,37 @@ public class LeafQueue extends AbstractCSQueue {
   private static final Log LOG = LogFactory.getLog(LeafQueue.class);
 
   private float absoluteUsedCapacity = 0.0f;
-  private int userLimit;
-  private float userLimitFactor;
-
+  
+  private int userLimit;//userLimit和userLimitFactor用于运算maxApplicationsPerUser
+  private float userLimitFactor;//userLimit和userLimitFactor用于运算maxApplicationsPerUser
+  
   protected int maxApplications;//该队列最多允许的应用数量
-  protected int maxApplicationsPerUser;//该队列为每个人最多允许的应用数量
   
-  private float maxAMResourcePerQueuePercent;
-  private int maxActiveApplications; // Based on absolute max capacity
-  private int maxActiveAppsUsingAbsCap; // Based on absolute capacity
-  private int maxActiveApplicationsPerUser;
+  /**
+   * 该队列为每个人最多允许的应用数量
+   * 公式:(maxApplications * (userLimit / 100.0f) * userLimitFactor)
+   * 由此可见,userLimit表示百分比,大于100是不现实的，因为比如userLimit=200,则200/100 =2,表示该一个用户可以沾满整个队列的2倍,因此应该是100以内,表示百分比,比如50,表示一个用户可以使用最多50%的应用都由一个用户占满,不过由于userLimitFactor因此也可以随意调节,正负都可以,则该userLimit值也可以是很大的值,使用的时候根据公式自己算吧
+   */
+  protected int maxApplicationsPerUser;
   
+  
+  private float maxAMResourcePerQueuePercent;//解析yarn.scheduler.capacity.$queue.maximum-am-resource-percent,默认是1.0f
+  private int maxActiveApplications; // Based on absolute max capacity 该队列最多允许多少个活跃的应用,基于absolute max capacity
+  private int maxActiveAppsUsingAbsCap; // Based on absolute capacity 该队列最多允许多少个活跃的应用,基于absolute capacity
+  private int maxActiveApplicationsPerUser;//该队列为每一个user最多分配多少个活跃的队列
+  
+  //读取配置文件yarn.scheduler.capacity.node-locality-delay,默认是-1,整数
   private int nodeLocalityDelay;
 
-  Set<FiCaSchedulerApp> activeApplications;//已经执行的应用集合
   /**
    * 每一个应用实例,对应一个应用,里面包含等待的，也包含正在执行的应用
    */
   Map<ApplicationAttemptId, FiCaSchedulerApp> applicationAttemptMap = new HashMap<ApplicationAttemptId, FiCaSchedulerApp>(); 
   
-  Set<FiCaSchedulerApp> pendingApplications;//等候的应用集合
+  Set<FiCaSchedulerApp> pendingApplications;//等候的应用集合,该队列是有顺序的,按照app的顺序排列
+  Set<FiCaSchedulerApp> activeApplications;//已经执行的应用集合,该队列是有顺序的,按照app的顺序排列
   
-  private final float minimumAllocationFactor;
+  private final float minimumAllocationFactor;//最小分配因子,公式(maximumAllocation - minimumAllocation)/maximumAllocation
 
   /**
    * user的name和对应的user对象映射关系
@@ -125,44 +134,74 @@ public class LeafQueue extends AbstractCSQueue {
     this.scheduler = cs;
 
     this.activeUsersManager = new ActiveUsersManager(metrics);
+    
+    //(maximumAllocation - minimumAllocation)/maximumAllocation
     this.minimumAllocationFactor = 
         Resources.ratio(resourceCalculator, 
             Resources.subtract(maximumAllocation, minimumAllocation), 
             maximumAllocation);
 
+    //获取该队列在配置文件中配置的百分比,即配置的值/100,例如配置50,则该值为0.5
     float capacity = getCapacityFromConf();
+    //真实所占用的比例
     float absoluteCapacity = parent.getAbsoluteCapacity() * capacity;
 
+    //配置的最大值,以及最大值真实所占用的比例
     float maximumCapacity = 
         (float)cs.getConfiguration().getMaximumCapacity(getQueuePath()) / 100;
     float absoluteMaxCapacity = 
         CSQueueUtils.computeAbsoluteMaximumCapacity(maximumCapacity, parent);
 
+    //整数,默认是100
     int userLimit = cs.getConfiguration().getUserLimit(getQueuePath());
+    //浮点数,默认是1.0
     float userLimitFactor = 
       cs.getConfiguration().getUserLimitFactor(getQueuePath());
 
+    //默认是-1,整数,表示最多该队列上可以存储多少个app
     int maxApplications =
         cs.getConfiguration().getMaximumApplicationsPerQueue(getQueuePath());
-    if (maxApplications < 0) {
-      int maxSystemApps = cs.getConfiguration().getMaximumSystemApplications();
-      maxApplications = (int)(maxSystemApps * absoluteCapacity);
+    if (maxApplications < 0) {//如果设置的是-1,默认值
+      int maxSystemApps = cs.getConfiguration().getMaximumSystemApplications();//获取全局的最多允许多少个app
+      maxApplications = (int)(maxSystemApps * absoluteCapacity);//根据absoluteCapacity的真实比例 * maxSystemApps 运算获取该队列上存储最多多少个app
     }
+    
+    //该队列上每一个用户最多允许分配多少个应用
+    /**
+     * 公式:(maxApplications * (userLimit / 100.0f) * userLimitFactor)
+     * 由此可见,userLimit表示百分比,大于100是不现实的，因为比如userLimit=200,则200/100 =2,表示该一个用户可以沾满整个队列的2倍,因此应该是100以内,表示百分比,比如50,表示一个用户可以使用最多50%的应用都由一个用户占满,不过由于userLimitFactor因此也可以随意调节,正负都可以,则该userLimit值也可以是很大的值,使用的时候根据公式自己算吧
+     */
     maxApplicationsPerUser = 
       (int)(maxApplications * (userLimit / 100.0f) * userLimitFactor);
 
+    
+    //解析yarn.scheduler.capacity.$queue.maximum-am-resource-percent,默认是1.0f
     float maxAMResourcePerQueuePercent = cs.getConfiguration()
         .getMaximumApplicationMasterResourcePerQueuePercent(getQueuePath());
+    
+    /**
+     * 公式 (getClusterResource/minimumAllocation) * absoluteMaxCapacity * maxAMResourcePerQueuePercent
+     * 其中(getClusterResource/minimumAllocation) * absoluteMaxCapacity 表示当前队列可以允许多少个最小资源
+     * 获取该队列最多允许多少个活跃的应用
+     */
     int maxActiveApplications = 
         CSQueueUtils.computeMaxActiveApplications(
             resourceCalculator,
             cs.getClusterResource(), this.minimumAllocation,
             maxAMResourcePerQueuePercent, absoluteMaxCapacity);
+    
+    /**
+     * 公式 (getClusterResource/minimumAllocation) * absoluteCapacity * maxAMResourcePerQueuePercent
+     * 其中(getClusterResource/minimumAllocation) * absoluteMaxCapacity 表示当前队列可以允许多少个最小资源
+     * 获取该队列最多允许多少个活跃的应用
+     */
     this.maxActiveAppsUsingAbsCap = 
             CSQueueUtils.computeMaxActiveApplications(
                 resourceCalculator,
                 cs.getClusterResource(), this.minimumAllocation,
                 maxAMResourcePerQueuePercent, absoluteCapacity);
+    
+    //计算在该队列上每一个用户最多可以有多少个活跃的app
     int maxActiveApplicationsPerUser =
         CSQueueUtils.computeMaxActiveApplicationsPerUser(
             maxActiveAppsUsingAbsCap, userLimit, userLimitFactor);
@@ -188,14 +227,18 @@ public class LeafQueue extends AbstractCSQueue {
         + ", fullname=" + getQueuePath());
     }
 
+    //设置app的队列顺序
     Comparator<FiCaSchedulerApp> applicationComparator =
         cs.getApplicationComparator();
     this.pendingApplications = 
         new TreeSet<FiCaSchedulerApp>(applicationComparator);
+    
+    
     this.activeApplications = new TreeSet<FiCaSchedulerApp>(applicationComparator);
   }
   
   // externalizing in method, to allow overriding
+  //获取该队列在配置文件中配置的百分比,即配置的值/100,例如配置50,则该值为0.5
   protected float getCapacityFromConf() {
     return (float)scheduler.getConfiguration().getCapacity(getQueuePath()) / 100;
   }
@@ -553,11 +596,12 @@ public class LeafQueue extends AbstractCSQueue {
     getParent().submitApplicationAttempt(application, userName);
   }
 
+  //就是一顿校验
   @Override
   public void submitApplication(ApplicationId applicationId, String userName,String queue)  throws AccessControlException {
     // Careful! Locking order is important!
 
-    // Check queue ACLs
+    // Check queue ACLs 权限必须通过
     UserGroupInformation userUgi = UserGroupInformation.createRemoteUser(userName);
     if (!hasAccess(QueueACL.SUBMIT_APPLICATIONS, userUgi)
         && !hasAccess(QueueACL.ADMINISTER_QUEUE, userUgi)) {
@@ -568,6 +612,7 @@ public class LeafQueue extends AbstractCSQueue {
     User user = null;
     synchronized (this) {
 
+      //该队列状态必须是运行中的
       // Check if the queue is accepting jobs
       if (getState() != QueueState.RUNNING) {
         String msg = "Queue " + getQueuePath() +
@@ -576,7 +621,7 @@ public class LeafQueue extends AbstractCSQueue {
         throw new AccessControlException(msg);
       }
 
-      // Check submission limits for queues
+      // Check submission limits for queues 该队列运行的app数量必须充足
       if (getNumApplications() >= getMaxApplications()) {
         String msg = "Queue " + getQueuePath() + 
         " already has " + getNumApplications() + " applications," +
@@ -585,7 +630,7 @@ public class LeafQueue extends AbstractCSQueue {
         throw new AccessControlException(msg);
       }
 
-      // Check submission limits for the user on this queue
+      // Check submission limits for the user on this queue 确保该用户运行的app数量必须充足
       user = getUser(userName);
       if (user.getTotalApplications() >= getMaxApplicationsPerUser()) {
         String msg = "Queue " + getQueuePath() + 
@@ -612,20 +657,21 @@ public class LeafQueue extends AbstractCSQueue {
    * 从等待队列中执行新的应用
    */
   private synchronized void activateApplications() {
+	  //按照顺序,从等待队列中获取一个任务去激活
     for (Iterator<FiCaSchedulerApp> i=pendingApplications.iterator(); i.hasNext(); ) {
       FiCaSchedulerApp application = i.next();
       
-      // Check queue limit
+      // Check queue limit 只要队列空间还足够,就激活一个等待的任务
       if (getNumActiveApplications() >= getMaximumActiveApplications()) {
         break;
       }
       
       // Check user limit
       User user = getUser(application.getUser());
-      if (user.getActiveApplications() < getMaximumActiveApplicationsPerUser()) {
+      if (user.getActiveApplications() < getMaximumActiveApplicationsPerUser()) {//用户有足够的资源可以允许该任务的话
         user.activateApplication();
-        activeApplications.add(application);
-        i.remove();
+        activeApplications.add(application);//将任务添加到激活任务中
+        i.remove();//从等待任务中移除
         LOG.info("Application " + application.getApplicationId() +
             " from user: " + application.getUser() + 
             " activated in queue: " + getQueueName());
@@ -633,9 +679,12 @@ public class LeafQueue extends AbstractCSQueue {
     }
   }
   
+  /**
+   * 为该user添加一个尝试任务
+   */
   private synchronized void addApplicationAttempt(FiCaSchedulerApp application,User user) {
     // Accept 
-    user.submitApplication();
+    user.submitApplication();//添加一个等待任务
     pendingApplications.add(application);
     applicationAttemptMap.put(application.getApplicationAttemptId(), application);
 
@@ -699,6 +748,7 @@ public class LeafQueue extends AbstractCSQueue {
     return applicationAttemptMap.get(applicationAttemptId);
   }
 
+  //叶子队列分配一个空的资源信息,即没有在该队列上找到匹配的容器
   private static final CSAssignment NULL_ASSIGNMENT = new CSAssignment(Resources.createResource(0, 0), NodeType.NODE_LOCAL);
   
   private static final CSAssignment SKIP_ASSIGNMENT = new CSAssignment(true);
@@ -727,13 +777,14 @@ public class LeafQueue extends AbstractCSQueue {
   public synchronized CSAssignment assignContainers(Resource clusterResource,FiCaSchedulerNode node, boolean needToUnreserve) {
 
     if(LOG.isDebugEnabled()) {
+    	//打印日志,要在node上分配一个容器,该容器时从activeApplications这些个激活的应用中选择,为某一个应用提供一个容器
       LOG.debug("assignContainers: node=" + node.getNodeName()
         + " #applications=" + activeApplications.size());
     }
     
     // if our queue cannot access this node, just return检查是否可以访问该队列
     if (!SchedulerUtils.checkQueueAccessToNode(accessibleLabels,
-        labelManager.getLabelsOnNode(node.getNodeID()))) {
+        labelManager.getLabelsOnNode(node.getNodeID()))) {//如果该node节点的标签与该队列标签不符合,则返回一个空的分配结果
       return NULL_ASSIGNMENT;
     }
     
@@ -747,9 +798,10 @@ public class LeafQueue extends AbstractCSQueue {
     }
     
     // Try to assign containers to applications in order
-    for (FiCaSchedulerApp application : activeApplications) {
+    for (FiCaSchedulerApp application : activeApplications) {//按照顺序循环每一个应用
       
       if(LOG.isDebugEnabled()) {
+    	 //打印日志,预先要为该应用分配一个容器
         LOG.debug("pre-assignContainers for application "
         + application.getApplicationId());
         application.showRequests();
@@ -757,22 +809,22 @@ public class LeafQueue extends AbstractCSQueue {
 
       synchronized (application) {
         // Check if this resource is on the blacklist查看是否是黑名单节点,如果是则continue
-        if (SchedulerAppUtils.isBlacklisted(application, node, LOG)) {
+        if (SchedulerAppUtils.isBlacklisted(application, node, LOG)) {//该应用是否在该node上是黑名单,因此继续到下一个应用
           continue;
         }
         
         // Schedule in priority order
-        for (Priority priority : application.getPriorities()) {
+        for (Priority priority : application.getPriorities()) {//按照优先级,为该应用分配容器
           ResourceRequest anyRequest = application.getResourceRequest(priority, ResourceRequest.ANY);
           if (null == anyRequest) {
             continue;
           }
           
-          // Required resource
+          // Required resource 请求的资源
           Resource required = anyRequest.getCapability();
 
           // Do we need containers at this 'priority'?
-          if (application.getTotalRequiredResources(priority) <= 0) {
+          if (application.getTotalRequiredResources(priority) <= 0) {//说明该优先级上已经没有容器需要了,则继续寻找下一个优先级
             continue;
           }
           if (!this.reservationsContinueLooking) {
@@ -784,6 +836,7 @@ public class LeafQueue extends AbstractCSQueue {
             }
           }
           
+          //获取请求的标签集合
           Set<String> requestedNodeLabels =
               getRequestLabelSetByExpression(anyRequest
                   .getNodeLabelExpression());
@@ -793,50 +846,56 @@ public class LeafQueue extends AbstractCSQueue {
           //       priority request as the target. 
           //       This works since we never assign lower priority requests
           //       before all higher priority ones are serviced.
+          //计算user-limit和headroom的目的是为了更高级别的优先级请求
+          //所有的比更高级别的请求服务完前,是绝对不会服务低级别的请求的
+          //计算该app所属的user,他的允许使用资源的上限
           Resource userLimit = 
               computeUserLimitAndSetHeadroom(application, clusterResource, 
                   required, requestedNodeLabels);          
           
           // Check queue max-capacity limit
+          //仅仅循环每一个标签,查看标签的使用资源占比是否满足条件,如果有任意一个标签使用占比超量,则返回false
           if (!canAssignToThisQueue(clusterResource, required,
-              labelManager.getLabelsOnNode(node.getNodeID()), application, true)) {
+              labelManager.getLabelsOnNode(node.getNodeID()), application, true)) {//因为该node节点上任意一个label已经达到上限了,因此不会进行分配,也不会继续循环下一个app应用了,直接返回空对象即可
             return NULL_ASSIGNMENT;
           }
 
-          // Check user limit
+          // Check user limit 比较该label在该user上消费的资源,如果该资源比limit大,则返回false
           if (!assignToUser(clusterResource, application.getUser(), userLimit,
               application, true, requestedNodeLabels)) {
-            break;
+            break;//仅仅是跳出这个应用,继续获取下一个应用
           }
 
           // Inform the application it is about to get a scheduling opportunity
+          //通知这个应用,他有一个调度的机会
           application.addSchedulingOpportunity(priority);
           
-          // Try to schedule
+          // Try to schedule 去调度,让该应用的priority优先级上的请求在该node上去调度,返回在该node上分配的容器资源详细情况
           CSAssignment assignment =  
             assignContainersOnNode(clusterResource, node, application, priority, 
                 null, needToUnreserve);
 
-          // Did the application skip this node?
+          // Did the application skip this node?让这个应用跳过该node,则继续循环下一个优先级
           if (assignment.getSkipped()) {
-            // Don't count 'skipped nodes' as a scheduling opportunity!
+            // Don't count 'skipped nodes' as a scheduling opportunity!通知应用,减少他的一个调度机会
             application.subtractSchedulingOpportunity(priority);
             continue;
           }
           
           // Did we schedule or reserve a container?
-          Resource assigned = assignment.getResource();
+          Resource assigned = assignment.getResource();//获取准备调度的资源情况
           if (Resources.greaterThan(
-              resourceCalculator, clusterResource, assigned, Resources.none())) {
+              resourceCalculator, clusterResource, assigned, Resources.none())) {//发现资源大于none,则说明有资源被分配了
 
             // Book-keeping 
-            // Note: Update headroom to account for current allocation too...
+            // Note: Update headroom to account for current allocation too...更新资源使用情况
             allocateResource(clusterResource, application, assigned,
                 labelManager.getLabelsOnNode(node.getNodeID()));
             
             // Don't reset scheduling opportunities for non-local assignments
             // otherwise the app will be delayed for each non-local assignment.
             // This helps apps with many off-cluster requests schedule faster.
+            //重置调度机会,会请求更快的被调度,但是没看懂逻辑,以后要再详细看一下
             if (assignment.getType() != NodeType.OFF_SWITCH) {
               if (LOG.isDebugEnabled()) {
                 LOG.debug("Resetting scheduling opportunities");
@@ -845,8 +904,8 @@ public class LeafQueue extends AbstractCSQueue {
             }
             
             // Done
-            return assignment;
-          } else {
+            return assignment;//返回分配的容器信息
+          } else {//换另外一个app继续查找,该app是不能再满足需求了
             // Do not assign out of order w.r.t priorities
             break;
           }
@@ -887,6 +946,13 @@ public class LeafQueue extends AbstractCSQueue {
 	  computeUserLimit(application, clusterResource, required, user, null));
   }
   
+  /**
+   * @param user 用户占用资源的详细信息对象
+   * @param queueMaxCap 该队列的最大资源使用量
+   * @param clusterResource 集群资源
+   * @param userLimit 计算在该队列上该user最多允许多少资源,如果label有值,则要加上label做限制条件
+   * @return 返回还能使用多少资源
+   */
   private Resource getHeadroom(User user, Resource queueMaxCap,
       Resource clusterResource, Resource userLimit) {
     /** 
@@ -908,20 +974,24 @@ public class LeafQueue extends AbstractCSQueue {
      */
     Resource headroom = 
       Resources.min(resourceCalculator, clusterResource,
-        Resources.subtract(userLimit, user.getTotalConsumedResources()),
-        Resources.subtract(queueMaxCap, usedResources)
+        Resources.subtract(userLimit, user.getTotalConsumedResources()),//user资源最大限制-user已经使用量 = user剩余资源量
+        Resources.subtract(queueMaxCap, usedResources)//该队列最大使用量-已经使用量 = 还剩余能用多少使用量
         );
     return headroom;
   }
 
   /**
-   * 能否访问这个队列
+   * @param clusterResource 集群资源
+   * @param required 该容器准备请求的资源
+   * @param nodeLabels 该node节点能满足的标签
+   * @param application 该请求的资源属于什么app应用的
+   * 仅仅循环每一个标签,查看标签的使用资源占比是否满足条件,如果有任意一个标签使用占比超量,则返回false
    */
   synchronized boolean canAssignToThisQueue(Resource clusterResource,
       Resource required, Set<String> nodeLabels, FiCaSchedulerApp application, 
       boolean checkReservations) {
     // Get label of this queue can access, it's (nodeLabel AND queueLabel)
-    //获取该队列和该node的标签交集
+    //获取该队列和该node的标签交集,app应用必须满足这个标签交集
     Set<String> labelCanAccess;
     if (null == nodeLabels || nodeLabels.isEmpty()) {
       labelCanAccess = new HashSet<String>();
@@ -937,11 +1007,11 @@ public class LeafQueue extends AbstractCSQueue {
         usedResourcesByNodeLabels.put(label, Resources.createResource(0));
       }
       
-      //该标签应该存在的资源
+      //该标签可能在该队列上存在的资源
       Resource potentialTotalCapacity = Resources.add(usedResourcesByNodeLabels.get(label), required);
       
       /**
-       * 该标签应该获取资源的占比
+       * 该标签可能获取资源的占比
        */
       float potentialNewCapacity =
           Resources.divide(resourceCalculator, clusterResource,
@@ -989,31 +1059,45 @@ public class LeafQueue extends AbstractCSQueue {
         break;
       }
 
+      //打印日志,校验分配到队列的label标签,
       if (LOG.isDebugEnabled()) {
         LOG.debug(getQueueName()
-            + "Check assign to queue, label=" + label
-            + " usedResources: " + usedResourcesByNodeLabels.get(label)
-            + " clusterResources: " + clusterResource
+            + "Check assign to queue, label=" + label //标签名称
+            + " usedResources: " + usedResourcesByNodeLabels.get(label)//该标签已经使用的资源
+            + " clusterResources: " + clusterResource//集群资源
             + " currentCapacity "
             + Resources.divide(resourceCalculator, clusterResource,
                 usedResourcesByNodeLabels.get(label),
-                labelManager.getResourceByLabel(label, clusterResource))
+                labelManager.getResourceByLabel(label, clusterResource))//该标签的使用占比
             + " potentialNewCapacity: " + potentialNewCapacity + " ( "
-            + " max-capacity: " + absoluteMaxCapacity + ")");
+            + " max-capacity: " + absoluteMaxCapacity + ")");//最大占比
       }
     }
     
     return canAssign;
   }
 
+  /**
+   * 
+   * @param application app应用
+   * @param clusterResource 集群资源
+   * @param required 该app应用的每一个容器所需要的资源情况
+   * @param requestedLabels 该app应用的每一个容器请求需要的标签集合
+   * @return
+   * 计算该app所属的user,返回他的允许使用资源的上限,并且设置app的Headroom属性
+   */
   @Lock({LeafQueue.class, FiCaSchedulerApp.class})
   Resource computeUserLimitAndSetHeadroom(FiCaSchedulerApp application,
       Resource clusterResource, Resource required, Set<String> requestedLabels) {
+	  
+	//找到对应的user对象
     String user = application.getUser();
     User queueUser = getUser(user);
 
     // Compute user limit respect requested labels,
-    // TODO, need consider headroom respect labels also
+    //计算每一个用户的限制,并且尊重有请求中标签的情况,即有标签要特殊处理
+    // TODO, need consider headroom respect labels also headroom也需要特殊尊重有标签的请求
+    //计算在该队列上该user最多允许多少资源,如果label有值,则要加上label做限制条件
     Resource userLimit =
         computeUserLimit(application, clusterResource, required,
             queueUser, requestedLabels);
@@ -1021,9 +1105,11 @@ public class LeafQueue extends AbstractCSQueue {
     //Max avail capacity needs to take into account usage by ancestor-siblings
     //which are greater than their base capacity, so we are interested in "max avail"
     //capacity
+    //返回该队列可用的资源使用量绝对占比
     float absoluteMaxAvailCapacity = CSQueueUtils.getAbsoluteMaxAvailCapacity(
       resourceCalculator, clusterResource, this);
 
+    //集群资源 * 该队列可用的资源使用量绝对占比 = 该队列可以使用的资源最大量
     Resource queueMaxCap =                        // Queue Max-Capacity
         Resources.multiplyAndNormalizeDown(
             resourceCalculator, 
@@ -1031,6 +1117,7 @@ public class LeafQueue extends AbstractCSQueue {
             absoluteMaxAvailCapacity,
             minimumAllocation);
 	
+    //设置队列的全局信息
     synchronized (queueHeadroomInfo) {
       queueHeadroomInfo.setQueueMaxCap(queueMaxCap);
       queueHeadroomInfo.setClusterResource(clusterResource);
@@ -1041,9 +1128,9 @@ public class LeafQueue extends AbstractCSQueue {
     
     if (LOG.isDebugEnabled()) {
       LOG.debug("Headroom calculation for user " + user + ": " + 
-          " userLimit=" + userLimit + 
+          " userLimit=" + userLimit + //该用户在该队列使用的资源最高上限
           " queueMaxCap=" + queueMaxCap + 
-          " consumed=" + queueUser.getTotalConsumedResources() + 
+          " consumed=" + queueUser.getTotalConsumedResources() + //该用户使用的总资源 
           " headroom=" + headroom);
     }
     
@@ -1057,21 +1144,38 @@ public class LeafQueue extends AbstractCSQueue {
     return userLimit;
   }
   
+  /**
+   * @param application app应用
+   * @param clusterResource 集群资源
+   * @param required 该app应用的每一个容器所需要的资源情况
+   * @param user 该app应用的user对应的User对象
+   * @param requestedLabels 该app应用的每一个容器请求需要的标签集合
+   * @return 计算在该队列上该user最多允许多少资源,如果label有值,则要加上label做限制条件
+   */
   @Lock(NoLock.class)
   private Resource computeUserLimit(FiCaSchedulerApp application,
       Resource clusterResource, Resource required, User user,
       Set<String> requestedLabels) {
-    // What is our current capacity? 
+    // What is our current capacity? 什么是当前的容量
     // * It is equal to the max(required, queue-capacity) if
     //   we're running below capacity. The 'max' ensures that jobs in queues
     //   with miniscule capacity (< 1 slot) make progress
     // * If we're running over capacity, then its
     //   (usedResources + required) (which extra resources we are allocating)
-    Resource queueCapacity = Resource.newInstance(0, 0);
+    Resource queueCapacity = Resource.newInstance(0, 0);//表示该label在该队列上的资源使用量上限
     if (requestedLabels != null && !requestedLabels.isEmpty()) {
       // if we have multiple labels to request, we will choose to use the first
-      // label
+      // label 如果有多个label请求,则我们会选择第一个
       String firstLabel = requestedLabels.iterator().next();
+      /**
+       * 
+       * labelManager.getResourceByLabel(firstLabel,clusterResource) 获取该label对应的集群存储的资源
+       * getAbsoluteCapacityByNodeLabel(firstLabel) 返回配置文件中配置的该队列对该标签对应的绝对容量信息
+       * minimumAllocation最小的资源配置
+       * 
+       * 因此:
+       * Resources.multiplyAndNormalizeUp,返回的是label在总资源*该队列的label占比 = label在该队列上的资源最多使用量
+       */
       queueCapacity =
           Resources
               .max(resourceCalculator, clusterResource, queueCapacity,
@@ -1080,9 +1184,10 @@ public class LeafQueue extends AbstractCSQueue {
                           clusterResource),
                       getAbsoluteCapacityByNodeLabel(firstLabel),
                       minimumAllocation));
-    } else {
+    } else {//没有label请求,则我们使用绝对容量运算
       // else there's no label on request, just to use absolute capacity as
       // capacity for nodes without label
+      //返回的是总资源的*该队列的占比 = 在该队列上的资源最多使用量
       queueCapacity =
           Resources.multiplyAndNormalizeUp(resourceCalculator, labelManager
                 .getResourceByLabel(CommonNodeLabelsManager.NO_LABEL, clusterResource),
@@ -1096,6 +1201,11 @@ public class LeafQueue extends AbstractCSQueue {
             queueCapacity, 
             required);
 
+    /**
+     * 返回添加该资源后的总资源容量
+     * queueCapacity>usedResources,返回queueCapacity,因为总容量够,则返回总容量即可
+     * queueCapacity<=usedResources,返回Resources.add(usedResources, required),因为总容量不够,则要添加容量
+     */
     Resource currentCapacity =
         Resources.lessThan(resourceCalculator, clusterResource, 
             usedResources, queueCapacity) ?
@@ -1106,8 +1216,15 @@ public class LeafQueue extends AbstractCSQueue {
     // Also, the queue's configured capacity should be higher than 
     // queue-hard-limit * ulMin
     
+    //当前活跃用户数
     final int activeUsers = activeUsersManager.getNumActiveUsers();  
     		
+    /**
+     * 简单的公式算一下:
+     * 1.currentCapacity/activeUsers,表示当前活跃用户数平均每个用户占用容量
+     * 2.currentCapacity*userLimit,表示根据配置文件运算的话,每一个用户最多占用多少容量
+     * max(1,2)可以获取最多允许为每一个用户分配多少容量
+     */
     Resource limit =
         Resources.roundUp(
             resourceCalculator, 
@@ -1116,14 +1233,14 @@ public class LeafQueue extends AbstractCSQueue {
                 Resources.max(
                     resourceCalculator, clusterResource, 
                     Resources.divideAndCeil(
-                        resourceCalculator, currentCapacity, activeUsers),
+                        resourceCalculator, currentCapacity, activeUsers),//表示当前活跃用户数平均每个用户占用容量
                     Resources.divideAndCeil(
                         resourceCalculator, 
                         Resources.multiplyAndRoundDown(
                             currentCapacity, userLimit), 
-                        100)
+                        100)//计算每一个用户限制最大量
                     ), 
-                Resources.multiplyAndRoundDown(queueCapacity, userLimitFactor)
+                Resources.multiplyAndRoundDown(queueCapacity, userLimitFactor)//userLimitFactor如果大于100,则没意义,一定不会进入到这里,min阶段就过滤掉了,只会取第一部分
                 ), 
             minimumAllocation);
 
@@ -1147,19 +1264,32 @@ public class LeafQueue extends AbstractCSQueue {
     return limit;
   }
   
+  /**
+   * 
+   * @param clusterResource 集群资源
+   * @param userName 该app所属的user对象
+   * @param limit 所使用的资源上限,不允许比他大,如果比他大,则失败,返回false
+   * @param application 等待分配的app
+   * @param checkReservations
+   * @param requestLabels 该app所需要的请求的资源 需要的标签集合
+   * @return
+   * 目的是将app分配给该user,因此需要校验该队列能否容纳该user执行一个app了
+   * 比较该label在该user上消费的资源,如果该资源比limit大,则返回false
+   */
   @Private
   protected synchronized boolean assignToUser(Resource clusterResource,
       String userName, Resource limit, FiCaSchedulerApp application,
       boolean checkReservations, Set<String> requestLabels) {
-    User user = getUser(userName);
+    User user = getUser(userName);//获取user对象
     
-    String label = CommonNodeLabelsManager.NO_LABEL;
+    String label = CommonNodeLabelsManager.NO_LABEL;//设置默认标签
     if (requestLabels != null && !requestLabels.isEmpty()) {
-      label = requestLabels.iterator().next();
+      label = requestLabels.iterator().next();//获取第一个标签
     }
 
     // Note: We aren't considering the current request since there is a fixed
     // overhead of the AM, but it's a > check, not a >= check, so...
+    //比较该label在该user上消费的资源,如果该资源比limit大,则返回false
     if (Resources
         .greaterThan(resourceCalculator, clusterResource,
             user.getConsumedResourceByLabel(label),
@@ -1223,6 +1353,16 @@ public class LeafQueue extends AbstractCSQueue {
     return (((starvation + requiredContainers) - reservedContainers) > 0);
   }
 
+  /**
+   * 让该应用的priority优先级上的请求在该node上去调度
+   * @param clusterResource 集群资源
+   * @param node 要在哪个node上去调度容器
+   * @param application 容器所执行的是哪个app
+   * @param priority 容器所执行的是哪个app的什么优先级的请求
+   * @param reservedContainer
+   * @param needToUnreserve
+   * @return 返回在该node上分配的容器资源详细情况
+   */
   private CSAssignment assignContainersOnNode(Resource clusterResource,
       FiCaSchedulerNode node, FiCaSchedulerApp application, Priority priority,
       RMContainer reservedContainer, boolean needToUnreserve) {
@@ -1230,13 +1370,13 @@ public class LeafQueue extends AbstractCSQueue {
 
     // Data-local
     ResourceRequest nodeLocalResourceRequest =
-        application.getResourceRequest(priority, node.getNodeName());
+        application.getResourceRequest(priority, node.getNodeName());//获取本地请求
     if (nodeLocalResourceRequest != null) {
       assigned = 
           assignNodeLocalContainers(clusterResource, nodeLocalResourceRequest, 
               node, application, priority, reservedContainer, needToUnreserve); 
       if (Resources.greaterThan(resourceCalculator, clusterResource, 
-          assigned, Resources.none())) {
+          assigned, Resources.none())) {//说明已经获取到了资源,则返回
         return new CSAssignment(assigned, NodeType.NODE_LOCAL);
       }
     }
@@ -1334,6 +1474,7 @@ public class LeafQueue extends AbstractCSQueue {
 
     // Check queue max-capacity limit,
     // TODO: Consider reservation on labels
+    //仅仅循环每一个标签,查看标签的使用资源占比是否满足条件,如果有任意一个标签使用占比超量,则返回false
     if (!canAssignToThisQueue(clusterResource, capability, null, application, false)) {
       if (LOG.isDebugEnabled()) {
         LOG.debug("was going to reserve but hit queue limit");
@@ -1353,6 +1494,17 @@ public class LeafQueue extends AbstractCSQueue {
   }
 
 
+  /**
+   * 对本地节点分配容器资源
+   * @param clusterResource 集群资源
+   * @param nodeLocalResourceRequest 请求的资源量
+   * @param node 在该node上去请求一个容器执行任务
+   * @param application 执行哪个app上的资源任务
+   * @param priority 该app的任务的优先级
+   * @param reservedContainer
+   * @param needToUnreserve
+   * @return
+   */
   private Resource assignNodeLocalContainers(Resource clusterResource,
       ResourceRequest nodeLocalResourceRequest, FiCaSchedulerNode node,
       FiCaSchedulerApp application, Priority priority,
@@ -1408,7 +1560,7 @@ public class LeafQueue extends AbstractCSQueue {
       ResourceRequest offSwitchRequest = 
           application.getResourceRequest(priority, ResourceRequest.ANY);
       long missedOpportunities = application.getSchedulingOpportunities(priority);
-      long requiredContainers = offSwitchRequest.getNumContainers(); 
+      long requiredContainers = offSwitchRequest.getNumContainers(); //需要多少个容器
       
       float localityWaitFactor = 
         application.getLocalityWaitFactor(priority, 
@@ -1454,6 +1606,9 @@ public class LeafQueue extends AbstractCSQueue {
       createContainer(application, node, capability, priority);
   }
 
+  /**
+   * 创建一个容器
+   */
   Container createContainer(FiCaSchedulerApp application, FiCaSchedulerNode node, 
       Resource capability, Priority priority) {
   
@@ -1475,6 +1630,7 @@ public class LeafQueue extends AbstractCSQueue {
       ResourceRequest request, NodeType type, RMContainer rmContainer,
       boolean needToUnreserve) {
     if (LOG.isDebugEnabled()) {
+    	//打印日志,在node节点上为app的某个优先级分配一个容器,执行一定资源量
       LOG.debug("assignContainers: node=" + node.getNodeName()
         + " application=" + application.getApplicationId()
         + " priority=" + priority.getPriority()
@@ -1495,24 +1651,27 @@ public class LeafQueue extends AbstractCSQueue {
       return Resources.none();
     }
     
-    Resource capability = request.getCapability();
-    Resource available = node.getAvailableResource();
-    Resource totalResource = node.getTotalResource();
+    Resource capability = request.getCapability();//请求需要的资源
+    Resource available = node.getAvailableResource();//node节点可用资源
+    Resource totalResource = node.getTotalResource();//node节点总资源
 
-    if (!Resources.fitsIn(capability, totalResource)) {
+    if (!Resources.fitsIn(capability, totalResource)) {//说明capability>totalResource,即请求的资源要大于目前节点总资源,因此打印日志即可
+    	//打印日志,节点资源不足应付该请求
       LOG.warn("Node : " + node.getNodeID()
           + " does not have sufficient resource for request : " + request
           + " node total capability : " + node.getTotalResource());
       return Resources.none();
     }
+    
+    //断言,可用资源一定要存在
     assert Resources.greaterThan(
         resourceCalculator, clusterResource, available, Resources.none());
 
-    // Create the container if necessary
+    // Create the container if necessary 创建一个容器
     Container container = 
         getContainer(rmContainer, application, node, capability, priority);
   
-    // something went wrong getting/creating the container 
+    // something went wrong getting/creating the container 说明创建容器的时候失败了
     if (container == null) {
       LOG.warn("Couldn't get container for allocation!");
       return Resources.none();
@@ -1530,10 +1689,11 @@ public class LeafQueue extends AbstractCSQueue {
       }
     }
 
-    // Can we allocate a container on this node?
+    // Can we allocate a container on this node? 
+    //计算available/capability ,如果大于0,说明该node节点有足够的资源可以运行该任务
     int availableContainers = 
         resourceCalculator.computeAvailableContainers(available, capability);
-    if (availableContainers > 0) {
+    if (availableContainers > 0) {//说明该node节点有足够的资源可以运行该任务
       // Allocate...
 
       // Did we previously reserve containers at this 'priority'?
@@ -1570,7 +1730,7 @@ public class LeafQueue extends AbstractCSQueue {
         return Resources.none();
       }
 
-      // Inform the node
+      // Inform the node 在该node上调度该容器
       node.allocateContainer(allocatedContainer);
 
       LOG.info("assignedContainer" +
@@ -1580,7 +1740,7 @@ public class LeafQueue extends AbstractCSQueue {
           " clusterResource=" + clusterResource);
 
       return container.getResource();
-    } else {
+    } else {//说明该节点运行该任务资源不足
       // if we are allowed to allocate but this node doesn't have space, reserve it or
       // if this was an already a reserved container, reserve it again
       if ((canAllocContainer) || (rmContainer != null)) {
@@ -1645,6 +1805,9 @@ public class LeafQueue extends AbstractCSQueue {
     return false;
   }
 
+  /**
+   * 一个容器完成了
+   */
   @Override
   public void completedContainer(Resource clusterResource, 
       FiCaSchedulerApp application, FiCaSchedulerNode node, RMContainer rmContainer, 
@@ -1692,6 +1855,9 @@ public class LeafQueue extends AbstractCSQueue {
     }
   }
 
+  /**
+   * 添加资源的统计
+   */
   synchronized void allocateResource(Resource clusterResource,
       SchedulerApplicationAttempt application, Resource resource,
       Set<String> nodeLabels) {
@@ -1716,6 +1882,9 @@ public class LeafQueue extends AbstractCSQueue {
     }
   }
 
+  /**
+   * 释放资源的统计
+   */
   synchronized void releaseResource(Resource clusterResource, 
       FiCaSchedulerApp application, Resource resource, Set<String> nodeLabels) {
     super.releaseResource(clusterResource, resource, nodeLabels);
@@ -1975,8 +2144,8 @@ public class LeafQueue extends AbstractCSQueue {
    * the queue to calculate headroom on demand
    */
   static class QueueHeadroomInfo {
-    private Resource queueMaxCap;
-    private Resource clusterResource;
+    private Resource queueMaxCap;//该队列可以使用的资源最大量
+    private Resource clusterResource;//该集群总资源
     
     public void setQueueMaxCap(Resource queueMaxCap) {
       this.queueMaxCap = queueMaxCap;

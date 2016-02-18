@@ -84,7 +84,7 @@ public abstract class ResourceRequest implements Comparable<ResourceRequest> {
    * @param capability 所需要的内存+cpu资源
    * @param numContainers 需要多少个以上配置的容器
    * @param relaxLocality
-   * @param labelExpression
+   * @param labelExpression 按照&&分割拆分,获得标签集合
    * @return
    */
   @Public

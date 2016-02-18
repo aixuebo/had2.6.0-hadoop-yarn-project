@@ -76,8 +76,8 @@ public abstract class AbstractYarnScheduler
   // Whole capacity of the cluster 集群总体资源
   protected Resource clusterResource = Resource.newInstance(0, 0);
 
-  protected Resource minimumAllocation;//每一个任务的最小资源
-  protected Resource maximumAllocation;//每一个任务的最大资源
+  protected Resource minimumAllocation;//RM调度的每一个任务的最小资源
+  protected Resource maximumAllocation;//RM调度的每一个任务的最大资源
 
   protected RMContext rmContext;//ResourceManager上下文
   //正在调度的任务
@@ -212,6 +212,7 @@ public abstract class AbstractYarnScheduler
 
   /**
    * 通过容器获取该容器对应的调度任务
+   * 通过容器ID获取当前执行该容器的尝试任务
    */
   public T getCurrentAttemptForContainer(ContainerId containerId) {
     return getApplicationAttempt(containerId.getApplicationAttemptId());

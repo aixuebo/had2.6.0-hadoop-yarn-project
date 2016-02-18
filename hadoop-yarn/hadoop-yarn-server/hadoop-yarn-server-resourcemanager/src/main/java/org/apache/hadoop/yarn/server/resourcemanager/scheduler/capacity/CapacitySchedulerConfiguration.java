@@ -298,7 +298,7 @@ public class CapacitySchedulerConfiguration extends Configuration {
     return queueName;
   }
   
-  //yarn.scheduler.capacity.$queue.accessible-node-labels.label.
+  //yarn.scheduler.capacity.$queue.accessible-node-labels.$label.
   private String getNodeLabelPrefix(String queue, String label) {
     return getQueuePrefix(queue) + ACCESSIBLE_NODE_LABELS + DOT + label + DOT;
   }
@@ -424,6 +424,9 @@ public class CapacitySchedulerConfiguration extends Configuration {
     setFloat(getQueuePrefix(queue) + USER_LIMIT_FACTOR, userLimitFactor); 
   }
   
+  /**
+   * 设置该queue的状态,STOPPED或者RUNNING,只有该队列是RUNNING的时候才允许运行任务,并且父类也都得是RUNNING状态才允许运行任务
+   */
   //yarn.scheduler.capacity.$queue.state
   public QueueState getState(String queue) {
     String state = get(getQueuePrefix(queue) + STATE);
@@ -431,6 +434,7 @@ public class CapacitySchedulerConfiguration extends Configuration {
         QueueState.valueOf(state.toUpperCase()) : QueueState.RUNNING;
   }
   
+  //为该queu设置对应的标签集合
   public void setAccessibleNodeLabels(String queue, Set<String> labels) {
     if (labels == null) {
       return;
@@ -440,6 +444,10 @@ public class CapacitySchedulerConfiguration extends Configuration {
     set(getQueuePrefix(queue) + ACCESSIBLE_NODE_LABELS, str);
   }
   
+  /**
+   * 获取该queue队列对应的标签集合
+   * 设置该queue对应的标签集合,如果该标签中包含*,则其他非*的自动删除
+   */
   public Set<String> getAccessibleNodeLabels(String queue) {
 	  
 	//yarn.scheduler.capacity.$queue.accessible-node-labels
@@ -455,7 +463,7 @@ public class CapacitySchedulerConfiguration extends Configuration {
     } else {
       // print a warning when accessibleNodeLabel specified in config and queue
       // is ROOT
-      if (queue.equals(ROOT)) {
+      if (queue.equals(ROOT)) {//打印日志,如果是root队列,则即使是设置了该队列的可访问标签,也会被忽略该设置,root队列的标签就是*,表示any
         LOG.warn("Accessible node labels for root queue will be ignored,"
             + " it will be automatically set to \"*\".");
       }
@@ -475,6 +483,7 @@ public class CapacitySchedulerConfiguration extends Configuration {
     }
     
     // if labels contains "*", only keep ANY behind
+    //设置该queue对应的标签集合,如果该标签中包含*,则其他非*的自动删除
     if (set.contains(RMNodeLabelsManager.ANY)) {
       set.clear();
       set.add(RMNodeLabelsManager.ANY);
@@ -482,16 +491,30 @@ public class CapacitySchedulerConfiguration extends Configuration {
     return Collections.unmodifiableSet(set);
   }
   
+  /**
+   * 
+   * @param queue 队列名称
+   * @param labels该队列上设置的标签集合
+   * @param mgr 标签管理器
+   * @return 返回该队列上每一个标签对应的容量
+   */
   public Map<String, Float> getNodeLabelCapacities(String queue,
       Set<String> labels, RMNodeLabelsManager mgr) {
+	  
+	  /**
+	   * key是label,value是label配置文件中配置的数字的百分比
+	   */
     Map<String, Float> nodeLabelCapacities = new HashMap<String, Float>();
     
-    if (labels == null) {
+    if (labels == null) {//该队列上没有设置labels标签集合,则直接返回空的集合
       return nodeLabelCapacities;
     }
 
+    /**
+     * 如果标签包含*,则表示集群上所有标签都可以匹配该队列,否则仅仅使用参数标签集合
+     */
     for (String label : labels.contains(CommonNodeLabelsManager.ANY) ? mgr
-        .getClusterNodeLabels() : labels) {
+        .getClusterNodeLabels() : labels) {//循环该队列可用的标签
      
       //yarn.scheduler.capacity.$queue.accessible-node-labels.label.capacity
       String capacityPropertyName = getNodeLabelPrefix(queue, label) + CAPACITY;
@@ -512,15 +535,29 @@ public class CapacitySchedulerConfiguration extends Configuration {
     return nodeLabelCapacities;
   }
   
+  /**
+   * 
+   * @param queue 队列名称
+   * @param labels 该队列上设置的标签集合
+   * @param mgr 标签管理器
+   * @return 返回该队列上每一个标签对应的最大容量
+   */
   public Map<String, Float> getMaximumNodeLabelCapacities(String queue,
       Set<String> labels, RMNodeLabelsManager mgr) {
+	  
+	  /**
+	   * key是label,value是label配置文件中配置的数字的百分比
+	   */
     Map<String, Float> maximumNodeLabelCapacities = new HashMap<String, Float>();
-    if (labels == null) {
+    if (labels == null) {//该队列上没有设置labels标签集合,则直接返回空的集合
       return maximumNodeLabelCapacities;
     }
 
+    /**
+     * 如果标签包含*,则表示集群上所有标签都可以匹配该队列,否则仅仅使用参数标签集合
+     */
     for (String label : labels.contains(CommonNodeLabelsManager.ANY) ? mgr
-        .getClusterNodeLabels() : labels) {
+        .getClusterNodeLabels() : labels) {//循环该队列可用的标签
     	
       //yarn.scheduler.capacity.$queue.accessible-node-labels.label.maximum-capacity
       float maxCapacity =
@@ -642,7 +679,9 @@ public class CapacitySchedulerConfiguration extends Configuration {
   public Resource getMinimumAllocation() {
     int minimumMemory = getInt(
         YarnConfiguration.RM_SCHEDULER_MINIMUM_ALLOCATION_MB,
-        YarnConfiguration.DEFAULT_RM_SCHEDULER_MINIMUM_ALLOCATION_MB);
+        YarnConfiguration.DEFAULT_RM_SCHEDULER_MINIMUM_ALLOCATION_MB);//yarn.scheduler.minimum-allocation-mb,表示一个RM需要申请的最小内存量
+    
+    //yarn.scheduler.minimum-allocation-vcores,表示一个RM需要申请的最小cpu量
     int minimumCores = getInt(
         YarnConfiguration.RM_SCHEDULER_MINIMUM_ALLOCATION_VCORES,
         YarnConfiguration.DEFAULT_RM_SCHEDULER_MINIMUM_ALLOCATION_VCORES);
@@ -653,9 +692,12 @@ public class CapacitySchedulerConfiguration extends Configuration {
    * 获取最大资源
    */
   public Resource getMaximumAllocation() {
+	  //yarn.scheduler.maximum-allocation-mb 表示一个RM申请的最大的内存量 
     int maximumMemory = getInt(
         YarnConfiguration.RM_SCHEDULER_MAXIMUM_ALLOCATION_MB,
         YarnConfiguration.DEFAULT_RM_SCHEDULER_MAXIMUM_ALLOCATION_MB);
+    
+    //yarn.scheduler.maximum-allocation-vcores 表示一个RM申请的最大的CPU
     int maximumCores = getInt(
         YarnConfiguration.RM_SCHEDULER_MAXIMUM_ALLOCATION_VCORES,
         YarnConfiguration.DEFAULT_RM_SCHEDULER_MAXIMUM_ALLOCATION_VCORES);
@@ -751,6 +793,11 @@ public class CapacitySchedulerConfiguration extends Configuration {
    * Get user/group mappings to queues.
    *
    * @return user/groups mappings or null on illegal configs
+   * 
+   *       	用逗号拆分yarn.scheduler.capacity.queue-mappings,其中MappingType用u,g表示,分别表示user和group
+      	source表示组名字或者user名字,表示该名字映射到哪个队列中
+      	
+      	获取每一个user或者group对应使用哪个队列
    */
   public List<QueueMapping> getQueueMappings() {
     List<QueueMapping> mappings = new ArrayList<CapacitySchedulerConfiguration.QueueMapping>();
@@ -776,8 +823,8 @@ public class CapacitySchedulerConfiguration extends Configuration {
         }
         m = new QueueMapping(
                 mappingType,
-                mapping[1],
-                mapping[2]);
+                mapping[1],//组名字或者用户名字
+                mapping[2]);//该组或者用户映射到哪个队列中
       } catch (Throwable t) {
         throw new IllegalArgumentException(
             "Illegal queue mapping " + mappingValue);

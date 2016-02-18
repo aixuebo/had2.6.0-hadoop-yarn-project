@@ -25,13 +25,14 @@ import org.apache.hadoop.yarn.server.resourcemanager.scheduler.NodeType;
 import org.apache.hadoop.yarn.server.resourcemanager.scheduler.common.fica.FiCaSchedulerApp;
 import org.apache.hadoop.yarn.util.resource.Resources;
 
+//表示最终分配多少资源去在一个容器中执行一个任务,以及任务Node选择的节点类型
 @Private
 @Unstable
 public class CSAssignment {
-  final private Resource resource;
-  private NodeType type;
-  private final RMContainer excessReservation;
-  private final FiCaSchedulerApp application;
+  final private Resource resource;//该任务要分配多少资源去执行
+  private NodeType type;//节点类型
+  private final RMContainer excessReservation;//执行的容器
+  private final FiCaSchedulerApp application;//容器执行的任务,代表一个任务,即代表一个ApplicationAttempt
   private final boolean skipped;
   
   public CSAssignment(Resource resource, NodeType type) {

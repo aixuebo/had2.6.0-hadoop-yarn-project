@@ -31,20 +31,27 @@ import org.apache.hadoop.yarn.util.resource.ResourceCalculator;
 
 /**
  * Read-only interface to {@link CapacityScheduler} context.
+ * 表示调度器的上下文
  */
 public interface CapacitySchedulerContext {
+	
+  //公平队列的配置对象
   CapacitySchedulerConfiguration getConfiguration();
   
+  //RM调度的每一个任务的最小资源,包含CPU和内存
   Resource getMinimumResourceCapability();
 
+  //RM调度的每一个任务的最大资源,包含CPU和内存
   Resource getMaximumResourceCapability();
 
   RMContainerTokenSecretManager getContainerTokenSecretManager();
   
+  //在调度器中记录集群中节点数量
   int getNumClusterNodes();
 
   RMContext getRMContext();
   
+  //表示集群总资源
   Resource getClusterResource();
 
   /**
@@ -52,11 +59,15 @@ public interface CapacitySchedulerContext {
    */
   Configuration getConf();
 
+  //应用的比较器,比较应用的ID即可
   Comparator<FiCaSchedulerApp> getApplicationComparator();
 
+  //资源计算框架
   ResourceCalculator getResourceCalculator();
 
+  //队列比较器
   Comparator<CSQueue> getQueueComparator();
   
+  //获取某一个Node节点
   FiCaSchedulerNode getNode(NodeId nodeId);
 }

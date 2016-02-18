@@ -72,6 +72,7 @@ public class CommonNodeLabelsManager extends AbstractService {
   /**
    * If a user doesn't specify label of a queue or node, it belongs
    * DEFAULT_LABEL
+   * 默认标签
    */
   public static final String NO_LABEL = "";
 
@@ -79,6 +80,7 @@ public class CommonNodeLabelsManager extends AbstractService {
 
   /**
    * 每一个标签对应一个标签对象,该标签对象记录这该标签的使用资源
+   * key是label字符串,value是Label对象
    */
   protected ConcurrentMap<String, Label> labelCollections = new ConcurrentHashMap<String, Label>();
       
@@ -92,6 +94,7 @@ public class CommonNodeLabelsManager extends AbstractService {
 
   protected NodeLabelsStore store;//标签存储器
 
+  //记录每一个label标签所使用的资源情况
   protected static class Label {
     public Resource resource;
 
@@ -265,7 +268,7 @@ public class CommonNodeLabelsManager extends AbstractService {
    * 
    * @param labels
    *          new node labels added
-   * 向集群中添加新标签        
+   * 向集群中添加新标签
    */
   @SuppressWarnings("unchecked")
   public void addToCluserNodeLabels(Set<String> labels) throws IOException {
@@ -302,7 +305,7 @@ public class CommonNodeLabelsManager extends AbstractService {
    * 检查每一个Node上的全部标签集合是否存在,如果不存在则抛异常
    */
   protected void checkAddLabelsToNode(Map<NodeId, Set<String>> addedLabelsToNode) throws IOException {
-    if (null == addedLabelsToNode || addedLabelsToNode.isEmpty()) {
+    if (null == addedLabelsToNode || addedLabelsToNode.isEmpty()) {//不用检查
       return;
     }
 
@@ -312,7 +315,7 @@ public class CommonNodeLabelsManager extends AbstractService {
      * 循环每一个Node上的所有标签,看其是否在已知标签集合中
      */
     for (Entry<NodeId, Set<String>> entry : addedLabelsToNode.entrySet()) {
-      if (!knownLabels.containsAll(entry.getValue())) {
+      if (!knownLabels.containsAll(entry.getValue())) {//说明该Node对应的标签有未知的,则抛异常
         String msg =
             "Not all labels being added contained by known "
                 + "label collections, please check" + ", added labels=["
@@ -325,6 +328,7 @@ public class CommonNodeLabelsManager extends AbstractService {
   
   /**
    * 为每一个节点添加对应的标签集合
+   * 进入该方法,说明已经进行校验过了,label集合的内容都是合法的
    */
   @SuppressWarnings("unchecked")
   protected void internalAddLabelsToNode(Map<NodeId, Set<String>> addedLabelsToNode) throws IOException {
@@ -377,7 +381,7 @@ public class CommonNodeLabelsManager extends AbstractService {
   }
   
   /**
-   * 检查
+   * 检查,确保要删除的lable集合内的标签都是合法存在的标签
    */
   protected void checkRemoveFromClusterNodeLabels(Collection<String> labelsToRemove) throws IOException {
     if (null == labelsToRemove || labelsToRemove.isEmpty()) {
@@ -426,7 +430,7 @@ public class CommonNodeLabelsManager extends AbstractService {
       labelCollections.remove(label);
     }
 
-    // create event to remove labels
+    // create event to remove labels记录删除标签的日志
     if (null != dispatcher) {
       dispatcher.getEventHandler().handle(new RemoveClusterNodeLabels(labelsToRemove));
     }
@@ -452,6 +456,12 @@ public class CommonNodeLabelsManager extends AbstractService {
     internalRemoveFromClusterNodeLabels(labelsToRemove);
   }
   
+  /**
+   * 校验从指定node上移除指定label
+   * 1.校验要移除的label标签必须都合法
+   * 2.校验要移除的node是否存在
+   * 3.该node对应的标签集合中必须都包含所有的要删除的属于该node的标签
+   */
   protected void checkRemoveLabelsFromNode(Map<NodeId, Set<String>> removeLabelsFromNode) throws IOException {
     // check all labels being added existed 获取合法标签集合
     Set<String> knownLabels = labelCollections.keySet();
@@ -514,7 +524,7 @@ public class CommonNodeLabelsManager extends AbstractService {
   }
   
   /**
-   * 移除每一个node对应的标签集合
+   * 移除每一个node对应的标签集合,进入该方法,说明已经校验过了
    */
   @SuppressWarnings("unchecked")
   protected void internalRemoveLabelsFromNode(Map<NodeId, Set<String>> removeLabelsFromNode) {
@@ -525,11 +535,11 @@ public class CommonNodeLabelsManager extends AbstractService {
       Set<String> labels = entry.getValue();
       
       if (nodeId.getPort() == WILDCARD_PORT) {
-        Host host = nodeCollections.get(nodeId.getHost());
+        Host host = nodeCollections.get(nodeId.getHost());//从host中移除label
         host.labels.removeAll(labels);
         newNMToLabels.put(nodeId, host.labels);
       } else {
-        Node nm = getNMInNodeSet(nodeId);
+        Node nm = getNMInNodeSet(nodeId);//从指定node上移除label
         if (nm.labels != null) {
           nm.labels.removeAll(labels);
           newNMToLabels.put(nodeId, nm.labels);
@@ -600,12 +610,12 @@ public class CommonNodeLabelsManager extends AbstractService {
       Set<String> labels = entry.getValue();
 
       createHostIfNonExisted(nodeId.getHost());      
-      if (nodeId.getPort() == WILDCARD_PORT) {
+      if (nodeId.getPort() == WILDCARD_PORT) {//对host级别的标签全部替换成新的
         Host host = nodeCollections.get(nodeId.getHost());
         host.labels.clear();
         host.labels.addAll(labels);
         newNMToLabels.put(nodeId, host.labels);
-      } else {
+      } else {//对node级别的标签全部替换成新的
         createNodeIfNonExisted(nodeId);
         Node nm = getNMInNodeSet(nodeId);
         if (nm.labels == null) {
@@ -808,7 +818,7 @@ public class CommonNodeLabelsManager extends AbstractService {
   }
   
   /**
-   * 格式化
+   * 格式化,仅对label标签进行格式化
    */
   protected Map<NodeId, Set<String>> normalizeNodeIdToLabels(Map<NodeId, Set<String>> nodeIdToLabels) {
     Map<NodeId, Set<String>> newMap = new HashMap<NodeId, Set<String>>();

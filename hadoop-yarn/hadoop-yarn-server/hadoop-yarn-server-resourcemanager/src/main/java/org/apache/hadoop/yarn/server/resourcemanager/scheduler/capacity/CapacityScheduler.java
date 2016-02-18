@@ -124,6 +124,7 @@ public class CapacityScheduler extends
   // timeout to join when we stop this service
   protected final long THREAD_JOIN_TIMEOUT_MS = 1000;
 
+  //队列比较器,先比较队列的使用量,再比较队列的path
   static final Comparator<CSQueue> queueComparator = new Comparator<CSQueue>() {
     @Override
     public int compare(CSQueue q1, CSQueue q2) {
@@ -137,6 +138,7 @@ public class CapacityScheduler extends
     }
   };
 
+  //应用比较器,比较应用的ID即可
   static final Comparator<FiCaSchedulerApp> applicationComparator = 
     new Comparator<FiCaSchedulerApp>() {
     @Override
@@ -222,9 +224,9 @@ public class CapacityScheduler extends
           + ".scheduling-interval-ms";
   private static final long DEFAULT_ASYNC_SCHEDULER_INTERVAL = 5;
   
-  private boolean overrideWithQueueMappings = false;
-  private List<QueueMapping> mappings = null;
-  private Groups groups;
+  private boolean overrideWithQueueMappings = false;//是否启动user、group映射到组特性,yarn.scheduler.capacity.queue-mappings-override.enable,值是boolean类型
+  private List<QueueMapping> mappings = null;//获取每一个user或者group对应使用哪个队列
+  private Groups groups;//系统中所有的组信息
 
   @VisibleForTesting
   public synchronized String getMappedQueueForTest(String user)
@@ -374,16 +376,17 @@ public class CapacityScheduler extends
   private final static Random random = new Random(System.currentTimeMillis());
   
   /**
-   * Schedule on all nodes by starting at a random point.
+   * Schedule on all nodes by starting at a random point.从随机一个位置,开始调度所有的节点
    * @param cs
+   * 依次向每一个Node节点派发任务
    */
   static void schedule(CapacityScheduler cs) {
     // First randomize the start point
     int current = 0;
     Collection<FiCaSchedulerNode> nodes = cs.getAllNodes().values();
-    int start = random.nextInt(nodes.size());
+    int start = random.nextInt(nodes.size());//随机生成一个序号
     for (FiCaSchedulerNode node : nodes) {
-      if (current++ >= start) {
+      if (current++ >= start) {//从随机生成的序号位置开始执行
         cs.allocateContainersToNode(node);
       }
     }
@@ -445,12 +448,12 @@ public class CapacityScheduler extends
    * @throws IOException
    */
   private void initializeQueueMappings() throws IOException {
-    overrideWithQueueMappings = conf.getOverrideWithQueueMappings();
+    overrideWithQueueMappings = conf.getOverrideWithQueueMappings();//是否启动user、group映射到组特性
     LOG.info("Initialized queue mappings, override: "
         + overrideWithQueueMappings);
     // Get new user/group mappings
-    List<QueueMapping> newMappings = conf.getQueueMappings();
-    //check if mappings refer to valid queues
+    List<QueueMapping> newMappings = conf.getQueueMappings();//获取每一个user或者group对应使用哪个队列
+    //check if mappings refer to valid queues 校验每一个配置的合法性,该节点必须是叶子节点
     for (QueueMapping mapping : newMappings) {
       if (!mapping.queue.equals(CURRENT_USER_MAPPING) &&
           !mapping.queue.equals(PRIMARY_GROUP_MAPPING)) {
@@ -472,10 +475,10 @@ public class CapacityScheduler extends
   @Lock(CapacityScheduler.class)
   private void initializeQueues(CapacitySchedulerConfiguration conf)
     throws IOException {
-    root = parseQueue(this, conf, null, CapacitySchedulerConfiguration.ROOT,queues, queues, noop); 
+    root = parseQueue(this, conf, null, CapacitySchedulerConfiguration.ROOT,queues, queues, noop);//解析配置文件
     labelManager.reinitializeQueueLabels(getQueueToLabels());
     LOG.info("Initialized root queue " + root);
-    initializeQueueMappings();
+    initializeQueueMappings();//初始化user、或者group映射到队列
   }
 
   @Lock(CapacityScheduler.class)
@@ -503,6 +506,7 @@ public class CapacityScheduler extends
   
   /**
    * 返回每一个队列对应的标签集合
+   * key是队列的name,value是队列的标签集合
    */
   private Map<String, Set<String>> getQueueToLabels() {
     Map<String, Set<String>> queueToLabels = new HashMap<String, Set<String>>();
@@ -635,7 +639,7 @@ public class CapacityScheduler extends
   private static final String PRIMARY_GROUP_MAPPING = "%primary_group";
 
   /**
-   * 映射user应该对应的组
+   * 映射user应该对应的队列
    */
   private String getMappedQueue(String user) throws IOException {
     for (QueueMapping mapping : mappings) {
@@ -672,10 +676,11 @@ public class CapacityScheduler extends
   private synchronized void addApplication(ApplicationId applicationId,String queueName, String user, boolean isAppRecovering) {
     if (mappings != null && mappings.size() > 0) {
       try {
-        //根据用户查找对应的组
+        //根据用户查找对应的队列
         String mappedQueue = getMappedQueue(user);
         if (mappedQueue != null) {
           // We have a mapping, should we use it?
+        	//如果队列是default或者overrideWithQueueMappings是true,则重新为应用分配队列
           if (queueName.equals(YarnConfiguration.DEFAULT_QUEUE_NAME)
               || overrideWithQueueMappings) {
             LOG.info("Application " + applicationId + " user " + user
@@ -683,7 +688,7 @@ public class CapacityScheduler extends
                 + "] override " + overrideWithQueueMappings);
             queueName = mappedQueue;
             RMApp rmApp = rmContext.getRMApps().get(applicationId);
-            rmApp.setQueue(queueName);
+            rmApp.setQueue(queueName);//为该应用重新分配队列
           }
         }
       } catch (IOException ioex) {
@@ -695,9 +700,9 @@ public class CapacityScheduler extends
       }
     }
 
-    // sanity checks.
+    // sanity checks.安全检查
     CSQueue queue = getQueue(queueName);
-    if (queue == null) {
+    if (queue == null) {//队列不存在,则抛异常
       //During a restart, this indicates a queue was removed, which is
       //not presently supported
       if (isAppRecovering) {
@@ -715,7 +720,7 @@ public class CapacityScheduler extends
           .handle(new RMAppRejectedEvent(applicationId, message));
       return;
     }
-    if (!(queue instanceof LeafQueue)) {
+    if (!(queue instanceof LeafQueue)) {//队列不是叶子节点,则抛异常
       String message = "Application " + applicationId + 
           " submitted by user " + user + " to non-leaf queue: " + queueName;
       this.rmContext.getDispatcher().getEventHandler()
@@ -724,7 +729,7 @@ public class CapacityScheduler extends
     }
     // Submit to the queue
     try {
-      queue.submitApplication(applicationId, user, queueName);
+      queue.submitApplication(applicationId, user, queueName);//提交一个应用到队列中
     } catch (AccessControlException ace) {
       LOG.info("Failed to submit application " + applicationId + " to queue "
           + queueName + " from user " + user, ace);
@@ -757,9 +762,11 @@ public class CapacityScheduler extends
       boolean transferStateFromPreviousAttempt,
       boolean isAttemptRecovering) {
     
+	  //获取属于该应用对应的调度实例
     SchedulerApplication<FiCaSchedulerApp> application = applications.get(applicationAttemptId.getApplicationId());
-    CSQueue queue = (CSQueue) application.getQueue();
+    CSQueue queue = (CSQueue) application.getQueue();//获取所属队列
 
+    //创建一个app实例对象
     FiCaSchedulerApp attempt =
         new FiCaSchedulerApp(applicationAttemptId, application.getUser(),
           queue, queue.getActiveUsersManager(), rmContext);
@@ -787,6 +794,7 @@ public class CapacityScheduler extends
 
   /**
    * 响应事件,一个应用被移除事件
+   * @param finalState 最终app状态
    */
   private synchronized void doneApplication(ApplicationId applicationId,RMAppState finalState) {
     SchedulerApplication<FiCaSchedulerApp> application = applications.get(applicationId);
@@ -817,7 +825,7 @@ public class CapacityScheduler extends
     LOG.info("Application Attempt " + applicationAttemptId + " is done." +
         " finalState=" + rmAppAttemptFinalState);
     
-    FiCaSchedulerApp attempt = getApplicationAttempt(applicationAttemptId);
+    FiCaSchedulerApp attempt = getApplicationAttempt(applicationAttemptId);//获取尝试任务
     SchedulerApplication<FiCaSchedulerApp> application = applications.get(applicationAttemptId.getApplicationId());
 
     if (application == null || attempt == null) {
@@ -825,7 +833,7 @@ public class CapacityScheduler extends
       return;
     }
 
-    // Release all the allocated, acquired, running containers
+    // Release all the allocated, acquired, running containers杀死所有的该任务的容器
     for (RMContainer rmContainer : attempt.getLiveContainers()) {
       if (keepContainers
           && rmContainer.getState().equals(RMContainerState.RUNNING)) {
@@ -850,7 +858,7 @@ public class CapacityScheduler extends
         RMContainerEventType.KILL);
     }
 
-    // Clean up pending requests, metrics etc.
+    // Clean up pending requests, metrics etc.停止该尝试任务
     attempt.stop(rmAppAttemptFinalState);
 
     // Inform the queue
@@ -864,12 +872,20 @@ public class CapacityScheduler extends
     }
   }
 
+  /**
+   * @param ApplicationAttemptId 为该尝试任务分配资源
+   * @param ask 准备调度的任务
+   * @param release 准备去释放的容器
+   * @param blacklistAdditions 添加的黑名单
+   * @param blacklistRemovals 移除的黑名单集合
+   */
   @Override
   @Lock(Lock.NoLock.class)
   public Allocation allocate(ApplicationAttemptId applicationAttemptId,
-      List<ResourceRequest> ask, List<ContainerId> release, 
+      List<ResourceRequest> ask, List<ContainerId> release,
       List<String> blacklistAdditions, List<String> blacklistRemovals) {
 
+	  //获取尝试任务
     FiCaSchedulerApp application = getApplicationAttempt(applicationAttemptId);
     if (application == null) {
       LOG.info("Calling allocate on removed " +
@@ -882,7 +898,7 @@ public class CapacityScheduler extends
         ask, getResourceCalculator(), getClusterResource(),
         getMinimumResourceCapability(), maximumAllocation);
 
-    // Release containers
+    // Release containers释放容器
     releaseContainers(release, application);
 
     synchronized (application) {
@@ -924,6 +940,7 @@ public class CapacityScheduler extends
     }
   }
 
+  //返回队列的信息
   @Override
   @Lock(Lock.NoLock.class)
   public QueueInfo getQueueInfo(String queueName, 
@@ -1014,20 +1031,20 @@ public class CapacityScheduler extends
       return;
     }
 
-    // Assign new containers...
-    // 1. Check for reserved applications
-    // 2. Schedule if there are no reservations
-
+    // Assign new containers...因为要为该节点分配一个容器
+    // 1. Check for reserved applications 检查是否有预留保存的应用需要一个容器
+    // 2. Schedule if there are no reservations 调度一个容器
     RMContainer reservedContainer = node.getReservedContainer();
-    if (reservedContainer != null) {
+    if (reservedContainer != null) {//属于第一种可能,即有预留的容器
       FiCaSchedulerApp reservedApplication =
-          getCurrentAttemptForContainer(reservedContainer.getContainerId());
+          getCurrentAttemptForContainer(reservedContainer.getContainerId());//通过容器ID获取当前执行该容器的尝试任务
       
-      // Try to fulfill the reservation
+      // Try to fulfill the reservation 打印日志,在该节点执行预留的应用
       LOG.info("Trying to fulfill reservation for application " + 
           reservedApplication.getApplicationId() + " on node: " + 
           node.getNodeID());
       
+      //该应用所在队列一定是叶子节点
       LeafQueue queue = ((LeafQueue)reservedApplication.getQueue());
       CSAssignment assignment = queue.assignContainers(clusterResource, node,
           false);
@@ -1046,9 +1063,10 @@ public class CapacityScheduler extends
 
     }
 
-    // Try to schedule more if there are no reservations to fulfill
+    // Try to schedule more if there are no reservations to fulfill 如果该节点上没有预存的应用,则
     if (node.getReservedContainer() == null) {
-      if (calculator.computeAvailableContainers(node.getAvailableResource(),minimumAllocation) > 0) {
+    	//available.getMemory() / required.getMemory(),
+      if (calculator.computeAvailableContainers(node.getAvailableResource(),minimumAllocation) > 0) {//说明有内存资源充足
         if (LOG.isDebugEnabled()) {
           LOG.debug("Trying to schedule on node: " + node.getNodeName() +
               ", available: " + node.getAvailableResource());
@@ -1097,9 +1115,9 @@ public class CapacityScheduler extends
     {
       NodeUpdateSchedulerEvent nodeUpdatedEvent = (NodeUpdateSchedulerEvent)event;
       RMNode node = nodeUpdatedEvent.getRMNode();
-      nodeUpdate(node);
+      nodeUpdate(node);//更新该节点的信息
       if (!scheduleAsynchronously) {
-        allocateContainersToNode(getNode(node.getNodeID()));
+        allocateContainersToNode(getNode(node.getNodeID()));//为该节点分配容器
       }
     }
     break;
@@ -1275,6 +1293,7 @@ public class CapacityScheduler extends
         + " with event: " + event);
   }
 
+  //获取给定的app对应的尝试任务
   @Lock(Lock.NoLock.class)
   @VisibleForTesting
   @Override

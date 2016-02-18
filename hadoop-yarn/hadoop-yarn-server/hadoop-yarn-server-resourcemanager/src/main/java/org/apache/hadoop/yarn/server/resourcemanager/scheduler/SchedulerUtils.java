@@ -261,12 +261,12 @@ public class SchedulerUtils {
   }
   
   /**
-   * 校验是否可以访问,true表示可以访问,fasle表示不能访问
+   * 校验队列能否使用该节点的标签,true表示可以访问,fasle表示不能访问
    * @param queueLabels 该队列的标签集合
    * @param nodeLabels 该节点的标签集合
    */
   public static boolean checkQueueAccessToNode(Set<String> queueLabels,Set<String> nodeLabels) {
-    // if queue's label is *, it can access any node 如果队列标签集合中包含*,则返回true
+    // if queue's label is *, it can access any node 如果队列标签集合中包含*,则标示该队列可以使用任意标签,因此返回true
     if (queueLabels != null && queueLabels.contains(RMNodeLabelsManager.ANY)) {
       return true;
     }
@@ -284,6 +284,9 @@ public class SchedulerUtils {
     return false;
   }
   
+  /**
+   * 校验labels集合内的label必须都存在
+   */
   public static void checkIfLabelInClusterNodeLabels(RMNodeLabelsManager mgr,
       Set<String> labels) throws IOException {
     if (mgr == null) {
@@ -304,6 +307,11 @@ public class SchedulerUtils {
     }
   }
   
+  /**
+   * labelExpression,使用&&进行拆分,成数组,该数组内的所有label必须都在nodeLabels内存在,则返回true
+   * @param nodeLabels
+   * @param labelExpression,使用&&进行拆分,成数组
+   */
   public static boolean checkNodeLabelExpression(Set<String> nodeLabels,
       String labelExpression) {
     // empty label expression can only allocate on node with empty labels
@@ -324,12 +332,22 @@ public class SchedulerUtils {
     return true;
   }
 
+  /**
+   * 1.如果queueLabels队列的标签集合中有*,则返回true
+   * 2.如果labelExpression为null,也返回true
+   * 3.abelExpression 使用&&进行拆分,成数组,则数组中所有的label都必须在queueLabels队列的标签集合中
+   * @param queueLabels
+   * @param labelExpression 使用&&进行拆分,成数组
+   * @return
+   */
   public static boolean checkQueueLabelExpression(Set<String> queueLabels,
       String labelExpression) {
+	  
+	//如果queueLabels队列的标签集合中有*,则返回true
     if (queueLabels != null && queueLabels.contains(RMNodeLabelsManager.ANY)) {
       return true;
     }
-    // if label expression is empty, we can allocate container on any node
+    // if label expression is empty, we can allocate container on any node 如果labelExpression为null,也返回true
     if (labelExpression == null) {
       return true;
     }

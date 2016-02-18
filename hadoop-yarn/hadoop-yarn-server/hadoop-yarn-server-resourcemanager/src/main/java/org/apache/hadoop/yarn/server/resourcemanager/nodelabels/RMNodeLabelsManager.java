@@ -69,7 +69,7 @@ public class RMNodeLabelsManager extends CommonNodeLabelsManager {
 
   @Override
   public void addLabelsToNode(Map<NodeId, Set<String>> addedLabelsToNode)
-      throws IOException {    
+      throws IOException {
     try {
       writeLock.lock();
 

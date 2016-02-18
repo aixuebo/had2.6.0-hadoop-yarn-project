@@ -45,6 +45,13 @@ import org.apache.hadoop.yarn.util.Records;
  *
  * @see QueueState
  * @see ApplicationClientProtocol#getQueueInfo(org.apache.hadoop.yarn.api.protocolrecords.GetQueueInfoRequest)
+ * 
+ *     <name>yarn.scheduler.capacity.$queue.capacity</name>根的时候设置为100,表示百分比,即100%
+    1.capacity 就是100%,即1,因此0<capacity<1,该值仅仅表示为该队列在父队列的基础上的占比,配置文件中设置多少就是多少
+    2.maximumCapacity 与capacity含义一致,就是配置文件中原始的配置元素的百分比,即如果配置为50,则该值表示50%,即0.5
+    3.absoluteCapacity,表示绝对的capacity ,因此该值会根据父队列占总资源的capacity进行分配,
+                 比如:设置为50,则表示占比50,比如该队列还有子队列,设置为30,则表示子队列的资源使用为总资源*50%*30%
+    4.absoluteMaxCapacity 与absoluteCapacity含义一致,但是表示该队列最多允许分配的资源占比量
  */
 @Public
 @Stable
@@ -59,14 +66,14 @@ public abstract class QueueInfo {
       String defaultNodeLabelExpression) {
     QueueInfo queueInfo = Records.newRecord(QueueInfo.class);
     queueInfo.setQueueName(queueName);
-    queueInfo.setCapacity(capacity);
-    queueInfo.setMaximumCapacity(maximumCapacity);
-    queueInfo.setCurrentCapacity(currentCapacity);
-    queueInfo.setChildQueues(childQueues);
-    queueInfo.setApplications(applications);
-    queueInfo.setQueueState(queueState);
-    queueInfo.setAccessibleNodeLabels(accessibleNodeLabels);
-    queueInfo.setDefaultNodeLabelExpression(defaultNodeLabelExpression);
+    queueInfo.setCapacity(capacity);//配置文件中配置的该队列的资源占用百分比
+    queueInfo.setMaximumCapacity(maximumCapacity);//配置文件中配置的该队列的最大资源占用百分比
+    queueInfo.setCurrentCapacity(currentCapacity);//该队列真正已经使用的占比,公式:usedResources/(clusterResource*childQueue.getAbsoluteCapacity(),翻译 已经使用的资源量/该队列分配的capacity量,即就是该队列的使用百分比
+    queueInfo.setChildQueues(childQueues);//该队列的所有子队列
+    queueInfo.setApplications(applications);//该队列的所有应用
+    queueInfo.setQueueState(queueState);//该队列的状态
+    queueInfo.setAccessibleNodeLabels(accessibleNodeLabels);//该队列的标签
+    queueInfo.setDefaultNodeLabelExpression(defaultNodeLabelExpression);//该队列的默认标签
     return queueInfo;
   }
 

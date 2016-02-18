@@ -170,40 +170,44 @@ public class ParentQueue extends AbstractCSQueue {
   }
 
   private static float PRECISION = 0.0005f; // 0.05% precision
+  
   /**
    * 添加子队列,并且校验
    */
   void setChildQueues(Collection<CSQueue> childQueues) {
-    // Validate
+    // Validate 校验
     float childCapacities = 0;
     for (CSQueue queue : childQueues) {
       childCapacities += queue.getCapacity();
     }
+
     float delta = Math.abs(1.0f - childCapacities);  // crude way to check
     // allow capacities being set to 0, and enforce child 0 if parent is 0
-    //子节点所有的容量之和应该等于1,并且如果capacity=0,则子节点容量一定不能大于0
-    if (((capacity > 0) && (delta > PRECISION)) || 
-        ((capacity == 0) && (childCapacities > 0))) {
+    if (((capacity > 0) && (delta > PRECISION)) || //子节点所有的容量之和应该等于1
+        ((capacity == 0) && (childCapacities > 0))) {//并且如果capacity=0,则子节点容量一定不能大于0
       throw new IllegalArgumentException("Illegal" +
       		" capacity of " + childCapacities + 
       		" for children of queue " + queueName);
     }
+    
+    //校验label标签
     // check label capacities
-    for (String nodeLabel : labelManager.getClusterNodeLabels()) {
-      float capacityByLabel = getCapacityByNodeLabel(nodeLabel);
+    for (String nodeLabel : labelManager.getClusterNodeLabels()) {//循环集群所有的标签
+      float capacityByLabel = getCapacityByNodeLabel(nodeLabel);//返回配置文件中配置的该队列对该标签对应的容量信息
       // check children's labels
       float sum = 0;
-      for (CSQueue queue : childQueues) {
+      for (CSQueue queue : childQueues) {//计算子队列中为该标签配置的容量之和
         sum += queue.getCapacityByNodeLabel(nodeLabel);
       }
-      if ((capacityByLabel > 0 && Math.abs(1.0f - sum) > PRECISION)
-          || (capacityByLabel == 0) && (sum > 0)) {
+      if ((capacityByLabel > 0 && Math.abs(1.0f - sum) > PRECISION) //子节点有标签的所有的容量之和应该等于1
+          || (capacityByLabel == 0) && (sum > 0)) {//如果没有配置标签,则子节点不允许有该标签
         throw new IllegalArgumentException("Illegal" + " capacity of "
             + sum + " for children of queue " + queueName
             + " for label=" + nodeLabel);
       }
     }
     
+    //重新设置子队列
     this.childQueues.clear();
     this.childQueues.addAll(childQueues);
     if (LOG.isDebugEnabled()) {
@@ -217,12 +221,16 @@ public class ParentQueue extends AbstractCSQueue {
     return parentPath + getQueueName();
   }
 
+  /**
+   * @param includeChildQueues true表示要添加子队列的信息
+   * @param recursive 表示获取子队列信息的时候是否要获取孙子辈的信息
+   */
   @Override
   public synchronized QueueInfo getQueueInfo(boolean includeChildQueues, boolean recursive) { 
     queueInfo.setCurrentCapacity(usedCapacity);
 
     List<QueueInfo> childQueuesInfo = new ArrayList<QueueInfo>();
-    if (includeChildQueues) {
+    if (includeChildQueues) {//表示要添加子队列的信息
       for (CSQueue child : childQueues) {
         // Get queue information recursively?
         childQueuesInfo.add(child.getQueueInfo(recursive, recursive));
@@ -280,7 +288,7 @@ public class ParentQueue extends AbstractCSQueue {
   @Override
   public synchronized void reinitialize(CSQueue newlyParsedQueue, Resource clusterResource)
   throws IOException {
-    // Sanity check
+    // Sanity check 必须还得是父节点以及节点名称不能变
     if (!(newlyParsedQueue instanceof ParentQueue) ||
         !newlyParsedQueue.getQueuePath().equals(getQueuePath())) {
       throw new IOException("Trying to reinitialize " + getQueuePath() +
@@ -305,27 +313,32 @@ public class ParentQueue extends AbstractCSQueue {
 
     // Re-configure existing child queues and add new ones
     // The CS has already checked to ensure all existing child queues are present!
+    //改变前的子队列
     Map<String, CSQueue> currentChildQueues = getQueues(childQueues);
+    //改变后的子队列
     Map<String, CSQueue> newChildQueues = 
         getQueues(newlyParsedParentQueue.childQueues);
+    
+    //循环新的子队列
     for (Map.Entry<String, CSQueue> e : newChildQueues.entrySet()) {
-      String newChildQueueName = e.getKey();
-      CSQueue newChildQueue = e.getValue();
+      String newChildQueueName = e.getKey();//队列名称
+      CSQueue newChildQueue = e.getValue();//队列对象
 
+      //从老的队列中获取该队列
       CSQueue childQueue = currentChildQueues.get(newChildQueueName);
       
       // Check if the child-queue already exists
-      if (childQueue != null) {
-        // Re-init existing child queues
+      if (childQueue != null) {//说明该子队列以前存在
+        // Re-init existing child queues 重新初始化该子队列信息
         childQueue.reinitialize(newChildQueue, clusterResource);
         LOG.info(getQueueName() + ": re-configured queue: " + childQueue);
-      } else {
+      } else {//说明以前不存在,该子队列新添加的
         // New child queue, do not re-init
         
         // Set parent to 'this'
-        newChildQueue.setParent(this);
+        newChildQueue.setParent(this);//为新队列添加父队列关系
         
-        // Save in list of current child queues
+        // Save in list of current child queues 追加到当前队列集合中
         currentChildQueues.put(newChildQueueName, newChildQueue);
         
         LOG.info(getQueueName() + ": added new child queue: " + newChildQueue);
@@ -357,12 +370,12 @@ public class ParentQueue extends AbstractCSQueue {
     
     synchronized (this) {
       // Sanity check
-      if (queue.equals(queueName)) {
+      if (queue.equals(queueName)) {//不能提交应用到非叶子节点上
         throw new AccessControlException("Cannot submit application " +
             "to non-leaf queue: " + queueName);
       }
       
-      if (state != QueueState.RUNNING) {
+      if (state != QueueState.RUNNING) {//该队列是非运行的队列,也是不允许的
         throw new AccessControlException("Queue " + getQueuePath() +
             " is STOPPED. Cannot accept submission of application: " +
             applicationId);
@@ -395,6 +408,7 @@ public class ParentQueue extends AbstractCSQueue {
     // finish attempt logic.
   }
 
+  //增加该队列运行的应用job数量
   private synchronized void addApplication(ApplicationId applicationId,String user) {
 
     ++numApplications;
@@ -407,7 +421,7 @@ public class ParentQueue extends AbstractCSQueue {
   }
   
   /**
-   * 完成一个队列
+   * 完成一个队列,减少该队列运行的应用job数量
    */
   @Override
   public void finishApplication(ApplicationId application, String user) {
@@ -422,6 +436,7 @@ public class ParentQueue extends AbstractCSQueue {
     }
   }
 
+  //减少该队列运行的应用job数量
   private synchronized void removeApplication(ApplicationId applicationId,String user) { 
     
     --numApplications;
@@ -433,18 +448,21 @@ public class ParentQueue extends AbstractCSQueue {
         " #applications: " + getNumApplications());
   }
 
+  /**
+   * 为node分配一些容器
+   */
   @Override
   public synchronized CSAssignment assignContainers(Resource clusterResource, FiCaSchedulerNode node, boolean needToUnreserve) {
     
     CSAssignment assignment = new CSAssignment(Resources.createResource(0, 0), NodeType.NODE_LOCAL); 
     
-    // if our queue cannot access this node, just return 判断该队列的标签集合和该node上的标签集合是否可以互相访问,false表示不能
+    // if our queue cannot access this node, just return 判断该队列的标签集合能否在该node上执行
     if (!SchedulerUtils.checkQueueAccessToNode(accessibleLabels,labelManager.getLabelsOnNode(node.getNodeID()))) {
-      return assignment;
+      return assignment;//说明不能执行,则返回
     }
     
     //该节点不允许有分配预留资源并且该node节点的可用资源要大于每一个应用的最小资源
-    while (canAssign(clusterResource, node)) {
+    while (canAssign(clusterResource, node)) {//不断为该node分配容器
       if (LOG.isDebugEnabled()) {
         LOG.debug("Trying to assign containers to child-queue of "+ getQueueName());
       }
@@ -453,8 +471,9 @@ public class ParentQueue extends AbstractCSQueue {
       //该node上的标签集合
       Set<String> nodeLabels = labelManager.getLabelsOnNode(node.getNodeID()); 
       
-      // Are we over maximum-capacity for this queue?
-      if (!canAssignToThisQueue(clusterResource, nodeLabels)) {
+      // Are we over maximum-capacity for this queue?是否超过了该队列的最大容量限制
+      //true表示该资源可以存储在改队列上
+      if (!canAssignToThisQueue(clusterResource, nodeLabels)) {//不能分配到该队列
         // check to see if we could if we unreserve first
         localNeedToUnreserve = assignToQueueIfUnreserve(clusterResource);
         if (!localNeedToUnreserve) {
@@ -462,7 +481,7 @@ public class ParentQueue extends AbstractCSQueue {
         }
       }
       
-      // Schedule
+      // Schedule 真正去在子队列中找到可以在该node上执行的容器,然后返回
       CSAssignment assignedToChild = 
           assignContainersToChildQueues(clusterResource, node, localNeedToUnreserve | needToUnreserve);
       assignment.setType(assignedToChild.getType());
@@ -470,12 +489,12 @@ public class ParentQueue extends AbstractCSQueue {
       // Done if no child-queue assigned anything
       if (Resources.greaterThan(
               resourceCalculator, clusterResource, 
-              assignedToChild.getResource(), Resources.none())) {
+              assignedToChild.getResource(), Resources.none())) {//assignedToChild.getResource() > none,说明在该node上已经分配了容器
         // Track resource utilization for the parent-queue
         super.allocateResource(clusterResource, assignedToChild.getResource(),
-            nodeLabels);
+            nodeLabels);//添加该队列以及该队列上node标签上对应的资源使用情况
         
-        // Track resource utilization in this pass of the scheduler
+        // Track resource utilization in this pass of the scheduler将资源添加到全局assignment.getResource()中
         Resources.addTo(assignment.getResource(), assignedToChild.getResource());
         
         LOG.info("assignedContainer" +
@@ -498,7 +517,9 @@ public class ParentQueue extends AbstractCSQueue {
 
       // Do not assign more than one container if this isn't the root queue
       // or if we've already assigned an off-switch container
-      if (!rootQueue || assignment.getType() == NodeType.OFF_SWITCH) {
+      //如果不是root队列,则仅会为该node分一个容器即可退出
+      //如果分发到了OFF_SWITCH节点上了,则仅会为该node分一个容器即可退出
+      if (!rootQueue || assignment.getType() == NodeType.OFF_SWITCH) {//因为一直都是从root队列进来的,因此在root队列的时候会一直不断进行循环的,不会进入到if中
         if (LOG.isDebugEnabled()) {
           if (rootQueue && assignment.getType() == NodeType.OFF_SWITCH) {
             LOG.debug("Not assigning more than one off-switch container," +
@@ -516,6 +537,7 @@ public class ParentQueue extends AbstractCSQueue {
    * 判断能否在该队列中分配
    * @param clusterResource 集群资源
    * @param nodeLabels 该node节点的可用标签
+   * true表示该资源可以存储在改队列上
    */
   private synchronized boolean canAssignToThisQueue(Resource clusterResource,Set<String> nodeLabels) {
     //获取标签集合,要该队列的标签集合和该node标签集合的交集
@@ -528,18 +550,23 @@ public class ParentQueue extends AbstractCSQueue {
     }
     
     boolean canAssign = true;
-    for (String label : labelCanAccess) {
+    for (String label : labelCanAccess) {//循环可以访问的label标签
       //为每一个标签设置资源
       if (!usedResourcesByNodeLabels.containsKey(label)) {
         usedResourcesByNodeLabels.put(label, Resources.createResource(0));
       }
+      
+      /**
+       * usedResourcesByNodeLabels.get(label)/labelManager.getResourceByLabel(label, clusterResource)
+       * 即该label在该队列中已经使用的资源量/该label总的使用资源量 = 当前该label已经使用量的占比
+       */
       float currentAbsoluteLabelUsedCapacity =
           Resources.divide(resourceCalculator, clusterResource,
               usedResourcesByNodeLabels.get(label),
               labelManager.getResourceByLabel(label, clusterResource));
       // if any of the label doesn't beyond limit, we can allocate on this node
       if (currentAbsoluteLabelUsedCapacity >= 
-            getAbsoluteMaximumCapacityByNodeLabel(label)) {
+            getAbsoluteMaximumCapacityByNodeLabel(label)) {//该标签,已经超过最大占比了,则不能分配该资源了
         if (LOG.isDebugEnabled()) {
           LOG.debug(getQueueName() + " used=" + usedResources
               + " current-capacity (" + usedResourcesByNodeLabels.get(label) + ") "
@@ -595,6 +622,9 @@ public class ParentQueue extends AbstractCSQueue {
             node.getAvailableResource(), minimumAllocation);
   }
   
+  /**
+   * 在一个子队列中分配一个容器,返回分配后的信息
+   */
   private synchronized CSAssignment assignContainersToChildQueues(Resource cluster,FiCaSchedulerNode node, boolean needToUnreserve) { 
       
     CSAssignment assignment = new CSAssignment(Resources.createResource(0, 0), NodeType.NODE_LOCAL); 
@@ -602,14 +632,18 @@ public class ParentQueue extends AbstractCSQueue {
     printChildQueues();
 
     // Try to assign to most 'under-served' sub-queue
+    //循环每一个子队列,看看将那些任务分配到该node上,只要在一个队列上分配了任务则退出该循环
     for (Iterator<CSQueue> iter=childQueues.iterator(); iter.hasNext();) {
       CSQueue childQueue = iter.next();
       if(LOG.isDebugEnabled()) {
         LOG.debug("Trying to assign to queue: " + childQueue.getQueuePath()
           + " stats: " + childQueue);
       }
+      
+      //见该node分配到该子队列上
       assignment = childQueue.assignContainers(cluster, node, needToUnreserve);
       if(LOG.isDebugEnabled()) {
+    	  //打印日志,已经分发到该子队列上,并且子队列的状态...,打印在该队列上申请了多少资源,以及申请的type类型
         LOG.debug("Assigned to queue: " + childQueue.getQueuePath() +
           " stats: " + childQueue + " --> " + 
           assignment.getResource() + ", " + assignment.getType());
@@ -618,12 +652,12 @@ public class ParentQueue extends AbstractCSQueue {
       // If we do assign, remove the queue and re-insert in-order to re-sort
       if (Resources.greaterThan(
               resourceCalculator, cluster, 
-              assignment.getResource(), Resources.none())) {
+              assignment.getResource(), Resources.none())) {//如果我们申请到的资源比none空资源大,说明我们已经申请到资源了,则重新删除该队列,再重新插入,这样调整队列的顺序,可以使每一个子队列公平被调度
         // Remove and re-insert to sort 移除然后在插入,目的是为了排序
-        iter.remove();
+        iter.remove();//先移除队列
         LOG.info("Re-sorting assigned queue: " + childQueue.getQueuePath() + 
-            " stats: " + childQueue);
-        childQueues.add(childQueue);
+            " stats: " + childQueue);//打印重新排列队列日志
+        childQueues.add(childQueue);//重新添加该队列
         if (LOG.isDebugEnabled()) {
           printChildQueues();
         }

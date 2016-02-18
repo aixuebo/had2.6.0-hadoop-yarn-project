@@ -56,7 +56,7 @@ import org.apache.hadoop.yarn.server.resourcemanager.scheduler.capacity.Capacity
 /**
  * Represents an application attempt from the viewpoint of the FIFO or Capacity
  * scheduler.
- * 代表一个任务
+ * 代表一个任务,即代表一个ApplicationAttempt
  */
 @Private
 @Unstable
@@ -115,6 +115,7 @@ public class FiCaSchedulerApp extends SchedulerApplicationAttempt {
     return true;
   }
 
+  //为应用分配该容器
   synchronized public RMContainer allocate(NodeType type, FiCaSchedulerNode node,
       Priority priority, ResourceRequest request, 
       Container container) {
@@ -195,15 +196,16 @@ public class FiCaSchedulerApp extends SchedulerApplicationAttempt {
     return false;
   }
 
+  //等候因子
   public synchronized float getLocalityWaitFactor(
       Priority priority, int clusterNodes) {
     // Estimate: Required unique resources (i.e. hosts + racks)
     int requiredResources = 
-        Math.max(this.getResourceRequests(priority).size() - 1, 0);
+        Math.max(this.getResourceRequests(priority).size() - 1, 0);//有多少个请求资源
     
     // waitFactor can't be more than '1' 
     // i.e. no point skipping more than clustersize opportunities
-    return Math.min(((float)requiredResources / clusterNodes), 1.0f);
+    return Math.min(((float)requiredResources / clusterNodes), 1.0f);//计算平均每一个node节点要有多少个资源被请求
   }
 
   /**

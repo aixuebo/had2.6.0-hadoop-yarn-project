@@ -59,18 +59,21 @@ public class FileSystemNodeLabelsStore extends NodeLabelsStore {
   protected static final Log LOG = LogFactory.getLog(FileSystemNodeLabelsStore.class);
 
   protected static final String DEFAULT_DIR_NAME = "node-labels";
-  protected static final String MIRROR_FILENAME = "nodelabel.mirror";
-  protected static final String EDITLOG_FILENAME = "nodelabel.editlog";
+  protected static final String MIRROR_FILENAME = "nodelabel.mirror";//已经保存过的镜像文件,先是存储ADD_LABELS,然后存储NODE_TO_LABELS
+  protected static final String EDITLOG_FILENAME = "nodelabel.editlog";//正在编辑的日志信息
   
   protected enum SerializedLogType {
-    ADD_LABELS, NODE_TO_LABELS, REMOVE_LABELS
+    ADD_LABELS,//添加标签集合
+    NODE_TO_LABELS,//向一个节点添加对应的标签集合
+    REMOVE_LABELS//删除标签集合
   }
 
-  Path fsWorkingPath;
+  Path fsWorkingPath;//标签存储的目录
   FileSystem fs;
   FSDataOutputStream editlogOs;
-  Path editLogPath;
+  Path editLogPath;//相当于编辑日志
   
+  //标签存储的默认目录
   private String getDefaultFSNodeLabelsRootDir() throws IOException {
     // default is in local: /tmp/hadoop-yarn-${user}/node-labels/
     return "file:///tmp/hadoop-yarn-"
@@ -101,7 +104,7 @@ public class FileSystemNodeLabelsStore extends NodeLabelsStore {
   }
 
   private void setFileSystem(Configuration conf) throws IOException {
-    Configuration confCopy = new Configuration(conf);
+    Configuration confCopy = new Configuration(conf);//本地复制了一份配置文件
     confCopy.setBoolean("dfs.client.retry.policy.enabled", true);
     String retryPolicy =
         confCopy.get(YarnConfiguration.FS_NODE_LABELS_STORE_RETRY_POLICY_SPEC,
@@ -111,13 +114,13 @@ public class FileSystemNodeLabelsStore extends NodeLabelsStore {
     
     // if it's local file system, use RawLocalFileSystem instead of
     // LocalFileSystem, the latter one doesn't support append.
-    if (fs.getScheme().equals("file")) {
+    if (fs.getScheme().equals("file")) {//获取本地文件系统对象
       fs = ((LocalFileSystem)fs).getRaw();
     }
   }
   
   private void ensureAppendEditlogFile() throws IOException {
-    editlogOs = fs.append(editLogPath);
+    editlogOs = fs.append(editLogPath);//对该path文件进行追加操作
   }
   
   private void ensureCloseEditlogFile() throws IOException {

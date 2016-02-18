@@ -41,6 +41,7 @@ import org.apache.hadoop.yarn.server.resourcemanager.scheduler.common.fica.FiCaS
 /**
  * <code>CSQueue</code> represents a node in the tree of 
  * hierarchical queues in the {@link CapacityScheduler}.
+ * CSQueue该类,代表CapacityScheduler公平调度器中队列树中的一个队列节点
  */
 @Stable
 @Private
@@ -78,6 +79,7 @@ extends org.apache.hadoop.yarn.server.resourcemanager.scheduler.Queue {
    * Get the configured <em>capacity</em> of the queue.
    * @return configured queue capacity
    * 配置文件中配置的该队列的资源
+   * 参见capacity-scheduler-myself.xml
    */
   public float getCapacity();
   
@@ -96,12 +98,14 @@ extends org.apache.hadoop.yarn.server.resourcemanager.scheduler.Queue {
    * @return capacity of the parent of the queue as a function of the 
    *         cumulative capacity in the cluster
    * 即该队列占用总资源的百分比.根据该队列的配置资源*父队列的资源百分比
+   * 参见capacity-scheduler-myself.xml
    */
   public float getAbsoluteCapacity();
   
   /**
    * Get the configured maximum-capacity of the queue. 
    * @return the configured maximum-capacity of the queue
+   * 配置文件中配置的最大占比值,参见capacity-scheduler-myself.xml
    */
   public float getMaximumCapacity();
   
@@ -111,27 +115,22 @@ extends org.apache.hadoop.yarn.server.resourcemanager.scheduler.Queue {
    * @return maximum-capacity of the queue as a funciton of the cumulative capacity
    *         of the cluster
    *  该队列占用总资源的最大百分比       
+   *  参见capacity-scheduler-myself.xml
    */
   public float getAbsoluteMaximumCapacity();
   
   /**
-   * Get the current absolute used capacity of the queue
-   * relative to the entire cluster.
+   * Get the current absolute used capacity of the queue relative to the entire cluster.
    * @return queue absolute used capacity
+   * 公式:usedResources/clusterResource,即该队列已经使用的资源占总资源的比例
    */
   public float getAbsoluteUsedCapacity();
-
-  /**
-   * Set used capacity of the queue.
-   * @param usedCapacity
-   *          used capacity of the queue
-   */
-  public void setUsedCapacity(float usedCapacity);
-
+  
   /**
    * Set absolute used capacity of the queue.
    * @param absUsedCapacity
    *          absolute used capacity of the queue
+   * 公式:usedResources/clusterResource,即该队列已经使用的资源占总资源的比例
    */
   public void setAbsoluteUsedCapacity(float absUsedCapacity);
 
@@ -139,8 +138,19 @@ extends org.apache.hadoop.yarn.server.resourcemanager.scheduler.Queue {
    * Get the current used capacity of nodes without label(s) of the queue
    * and it's children (if any).
    * @return queue used capacity
+   * 公式:usedResources/(clusterResource*childQueue.getAbsoluteCapacity()
+   * 翻译 已经使用的资源量/该队列分配的capacity量,即就是该队列的使用百分比
    */
   public float getUsedCapacity();
+  
+  /**
+   * Set used capacity of the queue.
+   * @param usedCapacity
+   *          used capacity of the queue
+   * 公式:usedResources/(clusterResource*childQueue.getAbsoluteCapacity()
+   * 翻译 已经使用的资源量/该队列分配的capacity量,即就是该队列的使用百分比
+   */
+  public void setUsedCapacity(float usedCapacity);
 
   /**
    * Get the currently utilized resources which allocated at nodes without any
@@ -177,9 +187,9 @@ extends org.apache.hadoop.yarn.server.resourcemanager.scheduler.Queue {
   
   /**
    * Submit a new application to the queue.
-   * @param applicationId the applicationId of the application being submitted
-   * @param user user who submitted the application
-   * @param queue queue to which the application is submitted
+   * @param applicationId the applicationId of the application being submitted 应用ID
+   * @param user user who submitted the application 应用的user
+   * @param queue queue to which the application is submitted 应用所属队列name
    * 提交一个应用
    */
   public void submitApplication(ApplicationId applicationId, String user,
@@ -298,6 +308,7 @@ extends org.apache.hadoop.yarn.server.resourcemanager.scheduler.Queue {
    * @param nodeLabel
    * @return absolute capacity by label of this queue can use
    * 获取该标签能使用的绝对资源
+   * 参见capacity-scheduler-myself.xml
    */
   public float getAbsoluteCapacityByNodeLabel(String nodeLabel);
   
@@ -306,6 +317,7 @@ extends org.apache.hadoop.yarn.server.resourcemanager.scheduler.Queue {
    * @param nodeLabel
    * @return absolute capacity by label of this queue can use
    * 获取该标签能使用的最大资源
+   * 参见capacity-scheduler-myself.xml
    */
   public float getAbsoluteMaximumCapacityByNodeLabel(String nodeLabel);
 

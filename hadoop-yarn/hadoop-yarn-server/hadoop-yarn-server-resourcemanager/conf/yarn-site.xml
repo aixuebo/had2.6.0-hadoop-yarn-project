@@ -46,11 +46,25 @@
     <property>
         <name>yarn.scheduler.minimum-allocation-mb</name>
         <value>2048</value>
+    	<description>表示一个RM需要申请的最小内存</description>
+    </property>
+    
+    <property>
+        <name>yarn.scheduler.maximum-allocation-mb</name>
+        <value>2048</value>
+    	<description>表示一个RM需要申请的最大内存</description>
     </property>
 
     <property>
+        <name>yarn.scheduler.minimum-allocation-vcores</name>
+        <value>1</value>
+    	<description>表示一个RM需要申请的最小CPU    </description>
+   </property>            
+   
+    <property>
         <name>yarn.scheduler.maximum-allocation-vcores</name>
         <value>24</value>
+    	<description>表示一个RM需要申请的最大CPU</description>
    </property>                  
 
    <property>

@@ -487,11 +487,17 @@ public class SchedulerApplicationAttempt {
     return this.appSchedulingInfo.isBlacklisted(resourceName);
   }
 
+  /**
+   * 调度队列会调用该方法,通知这个应用,他有一个调度的机会
+   */
   public synchronized void addSchedulingOpportunity(Priority priority) {
     schedulingOpportunities.setCount(priority,
         schedulingOpportunities.count(priority) + 1);
   }
   
+  /**
+   * 通知应用,减少他的一个调度机会
+   */
   public synchronized void subtractSchedulingOpportunity(Priority priority) {
     int count = schedulingOpportunities.count(priority) - 1;
     this.schedulingOpportunities.setCount(priority, Math.max(count,  0));

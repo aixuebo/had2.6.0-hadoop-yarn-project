@@ -34,6 +34,7 @@ import org.apache.hadoop.yarn.api.ApplicationClientProtocol;
  * 
  * @see QueueInfo
  * @see ApplicationClientProtocol#getQueueInfo(org.apache.hadoop.yarn.api.protocolrecords.GetQueueInfoRequest)
+ * 表示该queue的状态,STOPPED或者RUNNING,只有该队列是RUNNING的时候才允许运行任务,并且父类也都得是RUNNING状态才允许运行任务
  */
 @Public
 @Stable

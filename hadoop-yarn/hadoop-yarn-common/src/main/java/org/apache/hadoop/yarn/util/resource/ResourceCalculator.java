@@ -31,17 +31,37 @@ public abstract class ResourceCalculator {
   public abstract int 
   compare(Resource clusterResource, Resource lhs, Resource rhs);
   
+  /**
+   * ceil其实就是向上取整,返回double值,例如Math.ceil(2.6) = 3.0
+   * 
+   * 因此该方法,含义就是a/b的值,向上取整
+   * 例如 10/3 返回是4
+   */
   public static int divideAndCeil(int a, int b) {
     if (b == 0) {
       return 0;
     }
+    
+    //该公式可以拆开看,就是a/b + (b-1)/b 其实等于a/b之后多加了一个部分,因此会向上取整了
     return (a + (b - 1)) / b;
   }
 
+  /**
+   * 含义:其实最终的返回值与a的值是相近的,只是会比a略大一点,至于这一点是多少,取决于b的范围,比如b是100,则最终值与a相比较,最多差距100
+   * 公式简化为(a/b)*b 约等于a
+   * 但是divideAndCeil(a, b) * b的含义是a/b后向上取整了,因此会比a最终大一部分.
+   * 举例 a =10,b=3 则divideAndCeil(a, b) = ceil(3.3) = 4,因此最终值是4 * 3 = 12,比a这个10大了2,而2正好小于b的值3
+   */
   public static int roundUp(int a, int b) {
     return divideAndCeil(a, b) * b;
   }
 
+  /**
+   * 含义:其实最终的返回值与a的值是相近的,只是会比a略小一点,至于这一点是多少,取决于b的范围,比如b是100,则最终值与a相比较,最多差距100
+   * 公式简化为(a/b)*b 约等于a
+   * 但是(a / b) * b的含义是a/b后向下取整了,因此会比a最终小一部分.
+   * 举例 a =10,b=3 则a / b = down(3.3) = 3,因此最终值是3 * 3 = 9,比a这个10小了1,而1正好小于b的值3
+   */
   public static int roundDown(int a, int b) {
     return (a / b) * b;
   }

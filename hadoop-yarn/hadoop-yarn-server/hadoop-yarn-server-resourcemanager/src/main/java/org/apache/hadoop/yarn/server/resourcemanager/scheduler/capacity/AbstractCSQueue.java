@@ -42,18 +42,39 @@ import org.apache.hadoop.yarn.util.resource.Resources;
 
 import com.google.common.collect.Sets;
 
+/**
+           在AbstractCSQueue类中字段含义
+    <name>yarn.scheduler.capacity.$queue.capacity</name>根的时候设置为100,表示百分比,即100%
+    1.capacity 就是100%,即1,因此0<capacity<1,该值仅仅表示为该队列在父队列的基础上的占比,配置文件中设置多少就是多少
+    2.maximumCapacity 与capacity含义一致,就是配置文件中原始的配置元素的百分比,即如果配置为50,则该值表示50%,即0.5
+    3.absoluteCapacity,表示绝对的capacity ,因此该值会根据父队列占总资源的capacity进行分配,
+                 比如:设置为50,则表示占比50,比如该队列还有子队列,设置为30,则表示子队列的资源使用为总资源*50%*30%
+    4.absoluteMaxCapacity 与absoluteCapacity含义一致,但是表示该队列最多允许分配的资源占比量
+    5.capacitiyByNodeLabels,是yarn.scheduler.capacity.$queue.accessible-node-labels.$label.capacity对应的值/100,即百分比
+    6.maxCapacityByNodeLabels,是yarn.scheduler.capacity.$queue.accessible-node-labels.$label.maximum-capacity对应的值/100,即百分比
+    
+    //根据上面两个参数进行计算获取以下两个参数值
+    7.absoluteCapacityByNodeLabels,该值与capacitiyByNodeLabels向关联,获取最终的具体label所占用比例,可以参见absoluteCapacity
+    8.absoluteMaxCapacityByNodeLabels,该值与maxCapacityByNodeLabels向关联,获取最终的具体label所占用最大比例,可以参见absoluteMaxCapacity
+    
+    9.usedResources该队列已经使用的资源情况
+    10.Map<String, Resource> usedResourcesByNodeLabels,key是该队列中的每一个标签label,value是该标签对应的资源已经使用的情况
+    11.usedCapacity,该队列真正已经使用的占比,公式:usedResources/(clusterResource*childQueue.getAbsoluteCapacity(),翻译 已经使用的资源量/该队列分配的capacity量,即就是该队列的使用百分比
+    12.absoluteUsedCapacity,公式:usedResources/clusterResource,即该队列已经使用的资源占总资源的比例
+ */
 public abstract class AbstractCSQueue implements CSQueue {
   
   CSQueue parent;
   final String queueName;
   
   float capacity;//配置文件中配置的该队列的资源
-  float maximumCapacity;
+  float maximumCapacity;//配置文件中配置的该队列的资源
   float absoluteCapacity;//即该队列占用总资源的百分比.根据该队列的配置资源*父队列的资源百分比
-  float absoluteMaxCapacity;
-  float absoluteUsedCapacity = 0.0f;
-
-  float usedCapacity = 0.0f;
+  float absoluteMaxCapacity;//即该队列占用总资源的百分比.根据该队列的配置资源*父队列的资源百分比
+  
+  float usedCapacity = 0.0f;//该队列真正已经使用的占比,公式:usedResources/(clusterResource*childQueue.getAbsoluteCapacity(),翻译 已经使用的资源量/该队列分配的capacity量,即就是该队列的使用百分比
+  float absoluteUsedCapacity = 0.0f;//公式:usedResources/clusterResource,即该队列已经使用的资源占总资源的比例
+  
   volatile int numContainers;//该队列正在执行的容器数量
   
   final Resource minimumAllocation;//每一个应用分配的最小资源
@@ -64,21 +85,37 @@ public abstract class AbstractCSQueue implements CSQueue {
   final ResourceCalculator resourceCalculator;
   Set<String> accessibleLabels;//该队列可以访问的标签
   RMNodeLabelsManager labelManager;//标签管理器
-  String defaultLabelExpression;
+  String defaultLabelExpression;//设置该queue对应的默认标签集合
+  
+  //该队列的详细信息对象
+  QueueInfo queueInfo;
+  
   //该队列已经使用的资源大小
   Resource usedResources = Resources.createResource(0, 0);
-  QueueInfo queueInfo;
-  //每一个Node标签对应的资源使用真实比例
-  Map<String, Float> absoluteCapacityByNodeLabels;
-//每一个Node标签对应的配置文件中配置的资源比例
-  Map<String, Float> capacitiyByNodeLabels;
   /**
    * 为每一个标签设置资源
    * key是label的name,value是该标签的已使用的资源集合
    */
   Map<String, Resource> usedResourcesByNodeLabels = new HashMap<String, Resource>();
-  Map<String, Float> absoluteMaxCapacityByNodeLabels;
+  
+  //每一个Node标签对应的配置文件中配置的资源比例,该标签是配置文件中配置的数字/100,即配置的数字所占用百分比
+  Map<String, Float> capacitiyByNodeLabels;
+  
+  /**
+   * 所有的label的绝对使用量的占比的最大值,绝对使用量占比 = 该label在某一个队列中使用的占比/该label总使用资源占比
+   * 该标签是配置文件中配置的数字/100,即配置的数字所占用百分比
+   */
   Map<String, Float> maxCapacityByNodeLabels;
+  
+  //根据上面两个参数进行计算获取以下两个参数值
+  //每一个Node标签对应的资源使用真实比例
+  Map<String, Float> absoluteCapacityByNodeLabels;
+
+  /**
+   * 每一个lable绝对使用量的占比的最大值
+   * key是label的name,value是label的绝对使用量占比最大值,绝对使用量占比 = 该label在某一个队列中使用的占比/该label总使用资源占比
+   */
+  Map<String, Float> absoluteMaxCapacityByNodeLabels;
   
   Map<QueueACL, AccessControlList> acls = new HashMap<QueueACL, AccessControlList>(); 
   boolean reservationsContinueLooking;
@@ -101,7 +138,7 @@ public abstract class AbstractCSQueue implements CSQueue {
             cs.getConfiguration().getEnableUserMetrics(),
             cs.getConf());
     
-    // get labels
+    // get labels 获取该path对应的lable标签集合
     this.accessibleLabels = cs.getConfiguration().getAccessibleNodeLabels(getQueuePath());
     this.defaultLabelExpression = cs.getConfiguration()
         .getDefaultNodeLabelExpression(getQueuePath());
@@ -109,7 +146,7 @@ public abstract class AbstractCSQueue implements CSQueue {
     this.queueInfo.setQueueName(queueName);
     
     // inherit from parent if labels not set
-    if (this.accessibleLabels == null && parent != null) {
+    if (this.accessibleLabels == null && parent != null) {//可以从父标签中获取标签集合
       this.accessibleLabels = parent.getAccessibleNodeLabels();
     }
     SchedulerUtils.checkIfLabelInClusterNodeLabels(labelManager,
@@ -348,7 +385,7 @@ public abstract class AbstractCSQueue implements CSQueue {
         CSQueueUtils.computeAbsoluteCapacityByNodeLabels(
             this.capacitiyByNodeLabels, parent);
     
-    // calculate maximum capacity by each node label
+    // calculate maximum capacity by each node label 每一个lable绝对使用量的占比的最大值
     this.absoluteMaxCapacityByNodeLabels =
         CSQueueUtils.computeAbsoluteMaxCapacityByNodeLabels(
             maximumNodeLabelCapacities, parent);
@@ -370,19 +407,23 @@ public abstract class AbstractCSQueue implements CSQueue {
     return minimumAllocation;
   }
   
+  /**
+   * 为该队列分配了一个容器,该容器所需要的资源是resource参数,并且该资源resource占用了若干个标签
+   */
   synchronized void allocateResource(Resource clusterResource,Resource resource, Set<String> nodeLabels) { 
     //增加该队列的资源使用大小
     Resources.addTo(usedResources, resource);
     
     // Update usedResources by labels
     if (nodeLabels == null || nodeLabels.isEmpty()) {
-      if (!usedResourcesByNodeLabels.containsKey(RMNodeLabelsManager.NO_LABEL)) {
+      if (!usedResourcesByNodeLabels.containsKey(RMNodeLabelsManager.NO_LABEL)) {//添加一个没标签的队列资源
         usedResourcesByNodeLabels.put(RMNodeLabelsManager.NO_LABEL,Resources.createResource(0));
       }
+      //为该标签添加对应的资源使用情况
       Resources.addTo(usedResourcesByNodeLabels.get(RMNodeLabelsManager.NO_LABEL),resource);
     } else {
       //为每一个标签都增加使用资源
-      for (String label : Sets.intersection(accessibleLabels, nodeLabels)) {
+      for (String label : Sets.intersection(accessibleLabels, nodeLabels)) {//获取标签的交集,并且循环交集
         if (!usedResourcesByNodeLabels.containsKey(label)) {
           usedResourcesByNodeLabels.put(label, Resources.createResource(0));
         }
@@ -430,41 +471,44 @@ public abstract class AbstractCSQueue implements CSQueue {
   }
   
   /**
-   * 返回该标签对应的资源大小
-   * 如果node的资源为空.则返回该队列的所有资源，即该队列所有资源都可以为node为空的节点使用 
+   * 返回配置文件中配置的该队列对该标签对应的容量信息
    */
   @Private
   public float getCapacityByNodeLabel(String label) {
-    if (StringUtils.equals(label, RMNodeLabelsManager.NO_LABEL)) {
+    if (StringUtils.equals(label, RMNodeLabelsManager.NO_LABEL)) {//没有标签,则返回该队列在配置文件中配置的capacity
       if (null == parent) {
         return 1f;
       }
       return getCapacity();
     }
     
-    if (!capacitiyByNodeLabels.containsKey(label)) {
+    if (!capacitiyByNodeLabels.containsKey(label)) {//如果标签不在该队列中,则返回的容量时0
       return 0f;
-    } else {
+    } else {//否则返回该标签在该队列的配置文件中的容量
       return capacitiyByNodeLabels.get(label);
     }
   }
   
+  /**
+   * 返回配置文件中配置的该队列对该标签对应的绝对容量信息
+   */
   @Private
   public float getAbsoluteCapacityByNodeLabel(String label) {
-    if (StringUtils.equals(label, RMNodeLabelsManager.NO_LABEL)) {
+    if (StringUtils.equals(label, RMNodeLabelsManager.NO_LABEL)) {//没有标签,则返回该队列在配置文件中配置的绝对capacity
       if (null == parent) {
         return 1f; 
       }
       return getAbsoluteCapacity();
     }
     
-    if (!absoluteCapacityByNodeLabels.containsKey(label)) {
+    if (!absoluteCapacityByNodeLabels.containsKey(label)) {//如果标签不存在该队列中,则返回0
       return 0f;
-    } else {
+    } else {//否则返回对应的值
       return absoluteCapacityByNodeLabels.get(label);
     }
   }
   
+  //获取该label允许的最大容量
   @Private
   public float getAbsoluteMaximumCapacityByNodeLabel(String label) {
     if (StringUtils.equals(label, RMNodeLabelsManager.NO_LABEL)) {

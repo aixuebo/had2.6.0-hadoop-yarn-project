@@ -20,13 +20,14 @@ package org.apache.hadoop.yarn.server.resourcemanager.scheduler.capacity;
 import org.apache.hadoop.yarn.server.resourcemanager.scheduler.common.fica.FiCaSchedulerApp;
 import org.apache.hadoop.yarn.api.records.Resource;
 
+//一个应用app对应一个该对象
 public class CapacityHeadroomProvider {
   
-  LeafQueue.User user;
-  LeafQueue queue;
-  FiCaSchedulerApp application;
-  Resource required;
-  LeafQueue.QueueHeadroomInfo queueHeadroomInfo;
+  LeafQueue.User user;//叶子队列对应的user
+  LeafQueue queue;//所属叶子队列
+  FiCaSchedulerApp application;//是哪个app所属者
+  Resource required;//该app在容器中要求的资源使用量
+  LeafQueue.QueueHeadroomInfo queueHeadroomInfo;//叶子队列的全局对象
   
   public CapacityHeadroomProvider(
     LeafQueue.User user,
@@ -48,8 +49,8 @@ public class CapacityHeadroomProvider {
     Resource queueMaxCap;
     Resource clusterResource;
     synchronized (queueHeadroomInfo) {
-      queueMaxCap = queueHeadroomInfo.getQueueMaxCap();
-      clusterResource = queueHeadroomInfo.getClusterResource();
+      queueMaxCap = queueHeadroomInfo.getQueueMaxCap();//该队列可以使用的资源最大量
+      clusterResource = queueHeadroomInfo.getClusterResource();//该集群总资源
     }
     Resource headroom = queue.getHeadroom(user, queueMaxCap, 
       clusterResource, application, required);
