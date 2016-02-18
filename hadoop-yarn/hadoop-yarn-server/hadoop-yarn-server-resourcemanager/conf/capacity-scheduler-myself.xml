@@ -221,3 +221,6 @@ yarn.scheduler.capacity.schedule-asynchronously.enable
 yarn.scheduler.capacity.schedule-asynchronously.scheduling-interval-ms
 yarn.scheduler.capacity.resource-calculator 资源调度器,这个基本上不用改变
 
+
+CapacityScheduler:计算能力调度器,意义是先选择资源利用率低的queue，然后在queue中同时考虑FIFO和memory constraint因素
+FairScheduler:公平调度器仅考虑公平，而公平是通过作业缺额体现的，调度器每次选择缺额最大的job（queue的资源量，job优先级等仅用于计算作业缺额）

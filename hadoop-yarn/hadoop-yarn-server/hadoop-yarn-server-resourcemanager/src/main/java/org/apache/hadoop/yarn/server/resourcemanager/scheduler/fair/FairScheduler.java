@@ -107,6 +107,8 @@ import com.google.common.base.Preconditions;
  * separators.  So a queue named "queue1" under the root named, would be 
  * referred to as "root.queue1", and a queue named "queue2" under a queue
  * named "parent1" would be referred to as "root.parent1.queue2".
+ * 
+ * FairScheduler:公平调度器仅考虑公平，而公平是通过作业缺额体现的，调度器每次选择缺额最大的job（queue的资源量，job优先级等仅用于计算作业缺额）
  */
 @LimitedPrivate("yarn")
 @Unstable

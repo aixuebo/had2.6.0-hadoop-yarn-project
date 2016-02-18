@@ -208,3 +208,6 @@ secondaryGroupExistingQueue: the app is placed into a queue with a name that mat
 nestedUserQueue : the app is placed into a queue with the name of the user under the queue suggested by the nested rule. This is similar to â€˜userâ€™ rule,the difference being in ‘nestedUserQueue’ rule,user queues can be created under any parent queue, while ‘user’ rule creates user queues only under root queue. Note that nestedUserQueue rule would be applied only if the nested rule returns a parent queue.One can configure a parent queue either by setting ‘type’ attribute of queue to ‘parent’ or by configuring at least one leaf under that queue which makes it a parent. See example allocation for a sample use case.
 default: the app is placed into the queue specified in the ‘queue’ attribute of the default rule. If ‘queue’ attribute is not specified, the app is placed into ‘root.default’ queue.
 reject: the app is rejected.
+
+CapacityScheduler:计算能力调度器,意义是先选择资源利用率低的queue，然后在queue中同时考虑FIFO和memory constraint因素
+FairScheduler:公平调度器仅考虑公平，而公平是通过作业缺额体现的，调度器每次选择缺额最大的job（queue的资源量，job优先级等仅用于计算作业缺额）

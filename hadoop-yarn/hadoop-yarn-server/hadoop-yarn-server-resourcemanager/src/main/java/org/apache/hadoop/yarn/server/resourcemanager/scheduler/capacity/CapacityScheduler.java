@@ -111,6 +111,9 @@ import org.apache.hadoop.yarn.server.resourcemanager.scheduler.common.QueueEntit
 import org.apache.hadoop.yarn.server.resourcemanager.scheduler.SchedulerDynamicEditException;
 import org.apache.hadoop.yarn.server.resourcemanager.scheduler.Queue;
 
+/**
+ * CapacityScheduler:计算能力调度器,意义是先选择资源利用率低的queue，然后在queue中同时考虑FIFO和memory constraint因素
+ */
 @LimitedPrivate("yarn")
 @Evolving
 @SuppressWarnings("unchecked")
