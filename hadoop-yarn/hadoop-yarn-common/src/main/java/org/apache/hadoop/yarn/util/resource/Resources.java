@@ -259,6 +259,7 @@ public class Resources {
         smaller.getVirtualCores() <= bigger.getVirtualCores();
   }
   
+  //使用两个参数的最小资源量最终生成资源
   public static Resource componentwiseMin(Resource lhs, Resource rhs) {
     return createResource(Math.min(lhs.getMemory(), rhs.getMemory()),
         Math.min(lhs.getVirtualCores(), rhs.getVirtualCores()));
