@@ -21,6 +21,9 @@ package org.apache.hadoop.yarn.server.resourcemanager.resource;
 import org.apache.hadoop.classification.InterfaceAudience.Private;
 import org.apache.hadoop.classification.InterfaceStability.Evolving;
 
+/**
+ * 权重
+ */
 @Private
 @Evolving
 public class ResourceWeights {
@@ -28,6 +31,7 @@ public class ResourceWeights {
 
   private float[] weights = new float[ResourceType.values().length];
 
+  //所有队列的权重之和/总资源 * 权重 就是该权重应该占用的资源,这个公式很合理
   public ResourceWeights(float memoryWeight, float cpuWeight) {
     weights[ResourceType.MEMORY.ordinal()] = memoryWeight;
     weights[ResourceType.CPU.ordinal()] = cpuWeight;

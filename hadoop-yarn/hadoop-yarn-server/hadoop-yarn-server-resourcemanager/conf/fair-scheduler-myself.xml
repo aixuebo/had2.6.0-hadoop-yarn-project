@@ -132,6 +132,10 @@ b.如果pool或者queue的name是root,则表示仅能有一个root节点,剩下�
 12.pool和queue标签表示递归操作
 
 --------------------
+
+yarn.scheduler.fair.user-as-default-queue 是否将队列可以提交到user所在的队列中
+yarn.scheduler.fair.allow-undeclared-pools 返回boolean类型,表示是否终止队列替换代理
+--------------------
 翻译
 Queue elements: which represent queues. Queue elements can take an optional attribute ‘type’, which when set to ‘parent’ makes it a parent queue. This is useful when we want to create a parent queue without configuring any leaf queues. Each queue element may contain the following properties:
 queue元素标签,代表一个队列,有type属性,可以设置为parent,表示该队列是一个父队列,这个配置在没有为一个queue配置任何叶子节点的时候尤其有用,可以标记没有配置任何叶子节点的队列是父队列

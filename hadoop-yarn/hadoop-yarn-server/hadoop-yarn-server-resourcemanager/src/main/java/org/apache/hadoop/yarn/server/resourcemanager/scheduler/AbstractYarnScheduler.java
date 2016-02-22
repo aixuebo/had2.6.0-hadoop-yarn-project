@@ -287,6 +287,11 @@ public abstract class AbstractYarnScheduler
     }
   }
 
+  /**
+   * 恢复该node节点上的容器的状态
+   * @param containerReports 等待恢复的容器状态
+   * @param nm node节点
+   */
   public synchronized void recoverContainersOnNode(List<NMContainerStatus> containerReports, RMNode nm) {
       //前提目前程序必须是在恢复中,同时容器集合不允许为空
     if (!rmContext.isWorkPreservingRecoveryEnabled()
@@ -295,7 +300,7 @@ public abstract class AbstractYarnScheduler
       return;
     }
 
-    for (NMContainerStatus container : containerReports) {
+    for (NMContainerStatus container : containerReports) {//循环每一个等待还原的容器
       //如果应用不存在,则清理该容器
       ApplicationId appId =
           container.getContainerId().getApplicationAttemptId().getApplicationId();
