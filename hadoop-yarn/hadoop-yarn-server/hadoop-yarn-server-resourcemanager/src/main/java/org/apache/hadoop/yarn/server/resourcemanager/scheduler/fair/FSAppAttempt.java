@@ -629,6 +629,7 @@ public class FSAppAttempt extends SchedulerApplicationAttempt
    *
    * @param node
    *     Node that the application has an existing reservation on
+   * 向该node上分配资源
    */
   public Resource assignReservedContainer(FSSchedulerNode node) {
     RMContainer rmContainer = node.getReservedContainer();
@@ -655,12 +656,20 @@ public class FSAppAttempt extends SchedulerApplicationAttempt
   /**
    * Whether this app has containers requests that could be satisfied on the
    * given node, if the node had full space.
+   * 判断,该node节点上是否可以执行该优先级的容器
    */
   public boolean hasContainerForNode(Priority prio, FSSchedulerNode node) {
     ResourceRequest anyRequest = getResourceRequest(prio, ResourceRequest.ANY);
     ResourceRequest rackRequest = getResourceRequest(prio, node.getRackName());
     ResourceRequest nodeRequest = getResourceRequest(prio, node.getNodeName());
 
+    /**
+     * 以下四个都是true才允许返回true
+     * 1.必须有该优先级未处理的容器
+     * 2.
+     * 3.
+     * 4.该请求的资源.必须要小于node的资源,即该node可以提供资源执行该容器
+     */
     return
         // There must be outstanding requests at the given priority:
         anyRequest != null && anyRequest.getNumContainers() > 0 &&

@@ -78,7 +78,7 @@ public class FifoPolicy extends SchedulingPolicy {
       return;
     }
 
-    Schedulable earliest = null;
+    Schedulable earliest = null;//获取最早的调度器
     for (Schedulable schedulable : schedulables) {
       if (earliest == null ||
           schedulable.getStartTime() < earliest.getStartTime()) {

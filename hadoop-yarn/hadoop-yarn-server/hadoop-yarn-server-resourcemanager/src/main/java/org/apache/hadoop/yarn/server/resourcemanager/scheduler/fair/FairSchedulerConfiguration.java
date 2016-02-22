@@ -63,12 +63,15 @@ public class FairSchedulerConfiguration extends Configuration {
   protected static final String EVENT_LOG_DIR = "eventlog.dir";//事件日志存储目录
 
   /** Whether pools can be created that were not specified in the FS configuration file
+   * yarn.scheduler.fair.allow-undeclared-pools
    */
   protected static final String ALLOW_UNDECLARED_POOLS = CONF_PREFIX + "allow-undeclared-pools";
   protected static final boolean DEFAULT_ALLOW_UNDECLARED_POOLS = true;
   
   /** Whether to use the user name as the queue name (instead of "default") if
-   * the request does not specify a queue. */
+   * the request does not specify a queue. 
+   * yarn.scheduler.fair.user-as-default-queue 是否将队列可以提交到user所在的队列中
+   * */
   protected static final String  USER_AS_DEFAULT_QUEUE = CONF_PREFIX + "user-as-default-queue";
   protected static final boolean DEFAULT_USER_AS_DEFAULT_QUEUE = true;
 

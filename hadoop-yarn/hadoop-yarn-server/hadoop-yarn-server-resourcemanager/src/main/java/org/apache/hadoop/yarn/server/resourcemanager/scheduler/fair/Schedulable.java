@@ -53,7 +53,7 @@ import org.apache.hadoop.yarn.server.resourcemanager.rmcontainer.RMContainer;
 public interface Schedulable {
   /**
    * Name of job/queue, used for debugging as well as for breaking ties in
-   * scheduling order deterministically.
+   * scheduling order deterministically.调度器的名称
    */
   public String getName();
 
@@ -69,13 +69,13 @@ public interface Schedulable {
    **/
   public Resource getResourceUsage();
 
-  /** Minimum Resource share assigned to the schedulable. */
+  /** Minimum Resource share assigned to the schedulable.该调度器最小的资源 */
   public Resource getMinShare();
 
-  /** Maximum Resource share assigned to the schedulable. */
+  /** Maximum Resource share assigned to the schedulable. 该调度器最大的资源*/
   public Resource getMaxShare();
 
-  /** Job/queue weight in fair sharing. */
+  /** Job/queue weight in fair sharing. 调度队列的权重*/
   public ResourceWeights getWeights();
 
   /** Start time for jobs in FIFO queues; meaningless for QueueSchedulables.*/

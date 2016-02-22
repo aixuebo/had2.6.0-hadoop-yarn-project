@@ -42,7 +42,10 @@ import org.apache.hadoop.yarn.util.resource.Resources;
 @Unstable
 public abstract class FSQueue implements Queue, Schedulable {
   private Resource fairShare = Resources.createResource(0, 0);
-  private Resource steadyFairShare = Resources.createResource(0, 0);//稳定不变的
+  /**
+   * 稳定不变的,即通过FairScheduler中添加一个node以及删除一个node,或者node节点变化,及时获取的集群总资源情况
+   */
+  private Resource steadyFairShare = Resources.createResource(0, 0);
   private final String name;
   protected final FairScheduler scheduler;
   private final FSQueueMetrics metrics;
@@ -83,12 +86,14 @@ public abstract class FSQueue implements Queue, Schedulable {
     return parent;
   }
 
+  //抛异常,调度策略不允许使用该队列
   protected void throwPolicyDoesnotApplyException(SchedulingPolicy policy)
       throws AllocationConfigurationException {
     throw new AllocationConfigurationException("SchedulingPolicy " + policy
         + " does not apply to queue " + getName());
   }
 
+  //设置调度策略
   public abstract void setPolicy(SchedulingPolicy policy)
       throws AllocationConfigurationException;
 

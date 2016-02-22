@@ -58,7 +58,7 @@ public class FairSharePolicy extends SchedulingPolicy {
    * are as a ratio. For example, if job A has 8 out of a min share of 10 tasks
    * and job B has 50 out of a min share of 100, then job B is scheduled next,
    * because B is at 50% of its min share and A is at 80% of its min share.
-   * 
+   * 使用B,因为b已经使用了50%,而A已经用了80%
    * Schedulables above their min share are compared by (runningTasks / weight).
    * If all weights are equal, slots are given to the job with the fewest tasks;
    * otherwise, jobs with more weight get proportionally more slots.
@@ -73,33 +73,41 @@ public class FairSharePolicy extends SchedulingPolicy {
     public int compare(Schedulable s1, Schedulable s2) {
       double minShareRatio1, minShareRatio2;
       double useToWeightRatio1, useToWeightRatio2;
+      
+      //最小量,如果真实需求比最小量还小,则返回值是更小的真实需求
       Resource minShare1 = Resources.min(RESOURCE_CALCULATOR, null,
           s1.getMinShare(), s1.getDemand());
       Resource minShare2 = Resources.min(RESOURCE_CALCULATOR, null,
           s2.getMinShare(), s2.getDemand());
+      
+      //如果连最小资源都没占满,则谁比例最小,就用谁,true表示最小资源没占满
       boolean s1Needy = Resources.lessThan(RESOURCE_CALCULATOR, null,
           s1.getResourceUsage(), minShare1);
       boolean s2Needy = Resources.lessThan(RESOURCE_CALCULATOR, null,
           s2.getResourceUsage(), minShare2);
+      
+      //使用的内存/最小内存 = 使用了几倍的最小内存
       minShareRatio1 = (double) s1.getResourceUsage().getMemory()
           / Resources.max(RESOURCE_CALCULATOR, null, minShare1, ONE).getMemory();
       minShareRatio2 = (double) s2.getResourceUsage().getMemory()
           / Resources.max(RESOURCE_CALCULATOR, null, minShare2, ONE).getMemory();
+      
+      //比较单位权重下,谁使用的资源多
       useToWeightRatio1 = s1.getResourceUsage().getMemory() /
           s1.getWeights().getWeight(ResourceType.MEMORY);
       useToWeightRatio2 = s2.getResourceUsage().getMemory() /
           s2.getWeights().getWeight(ResourceType.MEMORY);
       int res = 0;
-      if (s1Needy && !s2Needy)
+      if (s1Needy && !s2Needy)//说明第一个最小资源没占满,第二个占满了,则使用第一个
         res = -1;
       else if (s2Needy && !s1Needy)
         res = 1;
-      else if (s1Needy && s2Needy)
+      else if (s1Needy && s2Needy) //如果两个都没占满最小资源,则使用最小的
         res = (int) Math.signum(minShareRatio1 - minShareRatio2);
-      else
+      else //如果两个最小资源都占满了,比较单位权重下,谁使用的资源多
         // Neither schedulable is needy
         res = (int) Math.signum(useToWeightRatio1 - useToWeightRatio2);
-      if (res == 0) {
+      if (res == 0) {//如果最小资源占比相同,比较开始时间,如果开始时间相同,则比较job名称,其实这些都失去了公平的意义了,相同的可能性也不大
         // Apps are tied in fairness ratio. Break the tie by submit time and job
         // name to get a deterministic ordering, which is useful for unit tests.
         res = (int) Math.signum(s1.getStartTime() - s2.getStartTime());
@@ -118,20 +126,31 @@ public class FairSharePolicy extends SchedulingPolicy {
   @Override
   public Resource getHeadroom(Resource queueFairShare,
                               Resource queueUsage, Resource clusterAvailable) {
+	  
+	//剩余空间
     int queueAvailableMemory = Math.max(
         queueFairShare.getMemory() - queueUsage.getMemory(), 0);
+    
     Resource headroom = Resources.createResource(
         Math.min(clusterAvailable.getMemory(), queueAvailableMemory),
         clusterAvailable.getVirtualCores());
     return headroom;
   }
 
+  /**
+   * @param queues 该队列的子队列集合
+   * @param totalResources 集群总资源
+   */
   @Override
   public void computeShares(Collection<? extends Schedulable> schedulables,
       Resource totalResources) {
     ComputeFairShares.computeShares(schedulables, totalResources, ResourceType.MEMORY);
   }
 
+  /**
+   * @param queues 该队列的子队列集合
+   * @param totalResources 集群总资源
+   */
   @Override
   public void computeSteadyShares(Collection<? extends FSQueue> queues,
       Resource totalResources) {
@@ -139,11 +158,17 @@ public class FairSharePolicy extends SchedulingPolicy {
         ResourceType.MEMORY);
   }
 
+  /**
+   * true表示usage>fairShare
+   */
   @Override
   public boolean checkIfUsageOverFairShare(Resource usage, Resource fairShare) {
     return Resources.greaterThan(RESOURCE_CALCULATOR, null, usage, fairShare);
   }
 
+  /**
+   * true表示usage>maxAMResource
+   */
   @Override
   public boolean checkIfAMResourceUsageOverLimit(Resource usage, Resource maxAMResource) {
     return usage.getMemory() > maxAMResource.getMemory();

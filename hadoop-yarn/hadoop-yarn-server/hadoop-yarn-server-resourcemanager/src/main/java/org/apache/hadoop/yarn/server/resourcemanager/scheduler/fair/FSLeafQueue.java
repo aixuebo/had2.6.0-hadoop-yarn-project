@@ -56,7 +56,7 @@ public class FSLeafQueue extends FSQueue {
   
   private Resource demand = Resources.createResource(0);
   
-  // Variables used for preemption
+  // Variables used for preemption 用于抢占
   private long lastTimeAtMinShare;
   private long lastTimeAtFairShareThreshold;
   
@@ -143,7 +143,7 @@ public class FSLeafQueue extends FSQueue {
   public void setPolicy(SchedulingPolicy policy)
       throws AllocationConfigurationException {
     if (!SchedulingPolicy.isApplicableTo(policy, SchedulingPolicy.DEPTH_LEAF)) {
-      throwPolicyDoesnotApplyException(policy);
+      throwPolicyDoesnotApplyException(policy);//抛异常
     }
     super.policy = policy;
   }

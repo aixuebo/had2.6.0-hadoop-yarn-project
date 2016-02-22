@@ -1,0 +1,712 @@
+public class FairScheduler extends
+    AbstractYarnScheduler<FSAppAttempt, FSSchedulerNode> {
+  private FairSchedulerConfiguration conf;
+
+  private Resource incrAllocation;
+  private QueueManager queueMgr;
+  private volatile Clock clock;
+  private boolean usePortForNodeName;
+  
+  // Value that container assignment methods return when a container is
+  // reserved
+  public static final Resource CONTAINER_RESERVED = Resources.createResource(-1);
+
+  // How often fair shares are re-calculated (ms)
+  protected long updateInterval;
+  private final int UPDATE_DEBUG_FREQUENCY = 5;
+  private int updatesToSkipForDebug = UPDATE_DEBUG_FREQUENCY;
+
+  @VisibleForTesting
+  Thread updateThread;
+
+  @VisibleForTesting
+  Thread schedulingThread;
+  // timeout to join when we stop this service
+  protected final long THREAD_JOIN_TIMEOUT_MS = 1000;
+
+  // Aggregate metrics
+  FSQueueMetrics rootMetrics;
+  FSOpDurations fsOpDurations;
+
+  // Time when we last updated preemption vars
+  protected long lastPreemptionUpdateTime;
+  // Time we last ran preemptTasksIfNecessary
+  private long lastPreemptCheckTime;
+
+  // Preemption related variables
+  protected boolean preemptionEnabled;//是否打开抢占资源开关
+  protected float preemptionUtilizationThreshold;//抢占资源的阀值,该值小于一定数值的时候则触发抢占
+  // How often tasks are preempted
+  protected long preemptionInterval; //抢占资源的时间间隔,至少过去多久才能抢占一次
+  
+  // ms to wait before force killing stuff (must be longer than a couple
+  // of heartbeats to give task-kill commands a chance to act).
+  protected long waitTimeBeforeKill; 
+  
+  // Containers whose AMs have been warned that they will be preempted soon.
+  //AM已经被警告,这些容器后期会被抢占的
+  private List<RMContainer> warnedContainers = new ArrayList<RMContainer>();
+  
+  protected boolean sizeBasedWeight; // Give larger weights to larger jobs
+  protected WeightAdjuster weightAdjuster; // Can be null for no weight adjuster
+  protected boolean continuousSchedulingEnabled; // Continuous Scheduling enabled or not
+  protected int continuousSchedulingSleepMs; // Sleep time for each pass in continuous scheduling
+  private Comparator<NodeId> nodeAvailableResourceComparator =
+          new NodeAvailableResourceComparator(); // Node available resource comparator
+  protected double nodeLocalityThreshold; // Cluster threshold for node locality
+  protected double rackLocalityThreshold; // Cluster threshold for rack locality
+  protected long nodeLocalityDelayMs; // Delay for node locality
+  protected long rackLocalityDelayMs; // Delay for rack locality
+  private FairSchedulerEventLog eventLog; // Machine-readable event log
+  protected boolean assignMultiple; // Allocate multiple containers per
+                                    // heartbeat,true表示一次心跳可以分配多个容器
+  protected int maxAssign; // Max containers to assign per heartbeat 每一次心跳最多可能分配的容器数量
+
+  @VisibleForTesting
+  final MaxRunningAppsEnforcer maxRunningEnforcer;
+
+  private AllocationFileLoaderService allocsLoader;//加载配置文件的服务
+  @VisibleForTesting
+  AllocationConfiguration allocConf;//最新的fair-scheduler.xml配置文件内容
+  
+
+  /**
+   * Thread which calls {@link FairScheduler#update()} every
+   * <code>updateInterval</code> milliseconds.
+   */
+  private class UpdateThread extends Thread {
+
+    @Override
+    public void run() {
+      while (!Thread.currentThread().isInterrupted()) {
+        try {
+          Thread.sleep(updateInterval);
+          long start = getClock().getTime();
+          update();
+          preemptTasksIfNecessary();
+          long duration = getClock().getTime() - start;
+          fsOpDurations.addUpdateThreadRunDuration(duration);
+        } catch (InterruptedException ie) {
+          LOG.warn("Update thread interrupted. Exiting.");
+          return;
+        } catch (Exception e) {
+          LOG.error("Exception in fair scheduler UpdateThread", e);
+        }
+      }
+    }
+  }
+
+  /**
+   * Thread which attempts scheduling resources continuously,
+   * asynchronous to the node heartbeats.
+   */
+  private class ContinuousSchedulingThread extends Thread {
+
+    @Override
+    public void run() {
+      while (!Thread.currentThread().isInterrupted()) {
+        try {
+          continuousSchedulingAttempt();
+          Thread.sleep(getContinuousSchedulingSleepMs());
+        } catch (InterruptedException e) {
+          LOG.warn("Continuous scheduling thread interrupted. Exiting.", e);
+          return;
+        }
+      }
+    }
+  }
+
+  /**
+   * Recompute the internal variables used by the scheduler - per-job weights,
+   * fair shares, deficits, minimum slot allocations, and amount of used and
+   * required resources per job.
+   */
+  protected synchronized void update() {
+    long start = getClock().getTime();
+    updateStarvationStats(); // Determine if any queues merit preemption
+
+    FSQueue rootQueue = queueMgr.getRootQueue();
+
+    // Recursively update demands for all queues
+    rootQueue.updateDemand();
+
+    rootQueue.setFairShare(clusterResource);
+    // Recursively compute fair shares for all queues
+    // and update metrics
+    rootQueue.recomputeShares();
+
+    if (LOG.isDebugEnabled()) {
+      if (--updatesToSkipForDebug < 0) {
+        updatesToSkipForDebug = UPDATE_DEBUG_FREQUENCY;
+        LOG.debug("Cluster Capacity: " + clusterResource +
+            "  Allocations: " + rootMetrics.getAllocatedResources() +
+            "  Availability: " + Resource.newInstance(
+            rootMetrics.getAvailableMB(),
+            rootMetrics.getAvailableVirtualCores()) +
+            "  Demand: " + rootQueue.getDemand());
+      }
+    }
+
+    long duration = getClock().getTime() - start;
+    fsOpDurations.addUpdateCallDuration(duration);
+  }
+
+  /**
+   * Update the preemption fields for all QueueScheduables, i.e. the times since
+   * each queue last was at its guaranteed share and over its fair share
+   * threshold for each type of task.
+   * 更新每一个叶子队列的饥饿状态
+   */
+  private void updateStarvationStats() {
+    lastPreemptionUpdateTime = clock.getTime();
+    for (FSLeafQueue sched : queueMgr.getLeafQueues()) {
+      sched.updateStarvationStats();
+    }
+  }
+
+  /**
+   * Check for queues that need tasks preempted, either because they have been
+   * below their guaranteed share for minSharePreemptionTimeout or they have
+   * been below their fair share threshold for the fairSharePreemptionTimeout. If
+   * such queues exist, compute how many tasks of each type need to be preempted
+   * and then select the right ones using preemptTasks.
+   */
+  protected synchronized void preemptTasksIfNecessary() {
+    if (!shouldAttemptPreemption()) {
+      return;
+    }
+
+    long curTime = getClock().getTime();
+    if (curTime - lastPreemptCheckTime < preemptionInterval) {//距离上次抢占已经过去不久
+      return;
+    }
+    
+    //距离上次抢占已经过去很久了
+    //设置上次抢占时间
+    lastPreemptCheckTime = curTime;
+
+    Resource resToPreempt = Resources.clone(Resources.none());//最终抢占的请求
+    for (FSLeafQueue sched : queueMgr.getLeafQueues()) {//循环所有的叶子节点,添加抢占的请求资源
+      Resources.addTo(resToPreempt, resToPreempt(sched, curTime));
+    }
+    if (Resources.greaterThan(RESOURCE_CALCULATOR, clusterResource, resToPreempt,
+        Resources.none())) {//说明抢占的请求大于0
+      preemptResources(resToPreempt);//执行抢占资源
+    }
+  }
+
+  /**
+   * Preempt a quantity of resources. Each round, we start from the root queue,
+   * level-by-level, until choosing a candidate application.
+   * The policy for prioritizing preemption for each queue depends on its
+   * SchedulingPolicy: (1) fairshare/DRF, choose the ChildSchedulable that is
+   * most over its fair share; (2) FIFO, choose the childSchedulable that is
+   * latest launched.
+   * Inside each application, we further prioritize preemption by choosing
+   * containers with lowest priority to preempt.
+   * We make sure that no queue is placed below its fair share in the process.
+   * 抢占资源
+   */
+  protected void preemptResources(Resource toPreempt) {
+    long start = getClock().getTime();
+    if (Resources.equals(toPreempt, Resources.none())) {
+      return;
+    }
+
+    // Scan down the list of containers we've already warned and kill them
+    // if we need to.  Remove any containers from the list that we don't need
+    // or that are no longer running.
+    //循环警告的容器
+    Iterator<RMContainer> warnedIter = warnedContainers.iterator();
+    while (warnedIter.hasNext()) {
+      RMContainer container = warnedIter.next();
+      if ((container.getState() == RMContainerState.RUNNING ||
+              container.getState() == RMContainerState.ALLOCATED) &&
+          Resources.greaterThan(RESOURCE_CALCULATOR, clusterResource,
+              toPreempt, Resources.none())) {
+        warnOrKillContainer(container);
+        Resources.subtractFrom(toPreempt, container.getContainer().getResource());
+      } else {
+        warnedIter.remove();
+      }
+    }
+
+    try {
+      // Reset preemptedResource for each app
+      for (FSLeafQueue queue : getQueueManager().getLeafQueues()) {
+        for (FSAppAttempt app : queue.getRunnableAppSchedulables()) {
+          app.resetPreemptedResources();
+        }
+      }
+
+      while (Resources.greaterThan(RESOURCE_CALCULATOR, clusterResource,
+          toPreempt, Resources.none())) {
+        RMContainer container =
+            getQueueManager().getRootQueue().preemptContainer();
+        if (container == null) {
+          break;
+        } else {
+          warnOrKillContainer(container);
+          warnedContainers.add(container);
+          Resources.subtractFrom(
+              toPreempt, container.getContainer().getResource());
+        }
+      }
+    } finally {
+      // Clear preemptedResources for each app
+      for (FSLeafQueue queue : getQueueManager().getLeafQueues()) {
+        for (FSAppAttempt app : queue.getRunnableAppSchedulables()) {
+          app.clearPreemptedResources();
+        }
+      }
+    }
+
+    long duration = getClock().getTime() - start;
+    fsOpDurations.addPreemptCallDuration(duration);
+  }
+  
+  /**
+   * 该容器所在的队列资源被抢占回来了
+   */
+  protected void warnOrKillContainer(RMContainer container) {
+    ApplicationAttemptId appAttemptId = container.getApplicationAttemptId();
+    FSAppAttempt app = getSchedulerApp(appAttemptId);
+    FSLeafQueue queue = app.getQueue();
+    LOG.info("Preempting container (prio=" + container.getContainer().getPriority() +
+        "res=" + container.getContainer().getResource() +
+        ") from queue " + queue.getName());
+    
+    Long time = app.getContainerPreemptionTime(container);
+
+    if (time != null) {
+      // if we asked for preemption more than maxWaitTimeBeforeKill ms ago,
+      // proceed with kill
+    	//如果我们请求的抢占花费了很久时间,则kill处理该容器
+      if (time + waitTimeBeforeKill < getClock().getTime()) {
+    	  
+    	//容器被抢占了,因此状态是被抢占了
+        ContainerStatus status =
+          SchedulerUtils.createPreemptedContainerStatus(
+            container.getContainerId(), SchedulerUtils.PREEMPTED_CONTAINER);
+
+        recoverResourceRequestForContainer(container);
+        // TODO: Not sure if this ever actually adds this to the list of cleanup
+        // containers on the RMNode (see SchedulerNode.releaseContainer()).
+        completedContainer(container, status, RMContainerEventType.KILL);
+        LOG.info("Killing container" + container +
+            " (after waiting for premption for " +
+            (getClock().getTime() - time) + "ms)");
+      }
+    } else {
+      // track the request in the FSAppAttempt itself
+      app.addPreemption(container, getClock().getTime());
+    }
+  }
+
+  /**
+   * Return the resource amount that this queue is allowed to preempt, if any.
+   * If the queue has been below its min share for at least its preemption
+   * timeout, it should preempt the difference between its current share and
+   * this min share. If it has been below its fair share preemption threshold
+   * for at least the fairSharePreemptionTimeout, it should preempt enough tasks
+   * to get up to its full fair share. If both conditions hold, we preempt the
+   * max of the two amounts (this shouldn't happen unless someone sets the
+   * timeouts to be identical for some reason).
+   */
+  protected Resource resToPreempt(FSLeafQueue sched, long curTime) {
+    long minShareTimeout = sched.getMinSharePreemptionTimeout();
+    long fairShareTimeout = sched.getFairSharePreemptionTimeout();
+    Resource resDueToMinShare = Resources.none();
+    Resource resDueToFairShare = Resources.none();
+    if (curTime - sched.getLastTimeAtMinShare() > minShareTimeout) {
+      Resource target = Resources.min(RESOURCE_CALCULATOR, clusterResource,
+          sched.getMinShare(), sched.getDemand());
+      resDueToMinShare = Resources.max(RESOURCE_CALCULATOR, clusterResource,
+          Resources.none(), Resources.subtract(target, sched.getResourceUsage()));
+    }
+    if (curTime - sched.getLastTimeAtFairShareThreshold() > fairShareTimeout) {
+      Resource target = Resources.min(RESOURCE_CALCULATOR, clusterResource,
+          sched.getFairShare(), sched.getDemand());
+      resDueToFairShare = Resources.max(RESOURCE_CALCULATOR, clusterResource,
+          Resources.none(), Resources.subtract(target, sched.getResourceUsage()));
+    }
+    Resource resToPreempt = Resources.max(RESOURCE_CALCULATOR, clusterResource,
+        resDueToMinShare, resDueToFairShare);
+    if (Resources.greaterThan(RESOURCE_CALCULATOR, clusterResource,
+        resToPreempt, Resources.none())) {
+      String message = "Should preempt " + resToPreempt + " res for queue "
+          + sched.getName() + ": resDueToMinShare = " + resDueToMinShare
+          + ", resDueToFairShare = " + resDueToFairShare;
+      LOG.info(message);
+    }
+    return resToPreempt;
+  }
+
+
+  // synchronized for sizeBasedWeight 设置app的权重
+  public synchronized ResourceWeights getAppWeight(FSAppAttempt app) {
+    double weight = 1.0;
+    if (sizeBasedWeight) {
+      // Set weight based on current memory demand
+      weight = Math.log1p(app.getDemand().getMemory()) / Math.log(2);
+    }
+    weight *= app.getPriority().getPriority();
+    if (weightAdjuster != null) {
+      // Run weight through the user-supplied weightAdjuster
+      weight = weightAdjuster.adjustWeight(app, weight);
+    }
+    ResourceWeights resourceWeights = app.getResourceWeights();
+    resourceWeights.setWeight((float)weight);
+    return resourceWeights;
+  }
+
+  public Resource getIncrementResourceCapability() {
+    return incrAllocation;
+  }
+
+  private FSSchedulerNode getFSSchedulerNode(NodeId nodeId) {
+    return nodes.get(nodeId);
+  }
+
+  public double getNodeLocalityThreshold() {
+    return nodeLocalityThreshold;
+  }
+
+  public double getRackLocalityThreshold() {
+    return rackLocalityThreshold;
+  }
+
+  public long getNodeLocalityDelayMs() {
+    return nodeLocalityDelayMs;
+  }
+
+  public long getRackLocalityDelayMs() {
+    return rackLocalityDelayMs;
+  }
+
+  public boolean isContinuousSchedulingEnabled() {
+    return continuousSchedulingEnabled;
+  }
+
+  public synchronized int getContinuousSchedulingSleepMs() {
+    return continuousSchedulingSleepMs;
+  }
+
+  @Override
+  public Allocation allocate(ApplicationAttemptId appAttemptId,
+      List<ResourceRequest> ask, List<ContainerId> release, List<String> blacklistAdditions, List<String> blacklistRemovals) {
+
+    // Make sure this application exists
+    FSAppAttempt application = getSchedulerApp(appAttemptId);
+    if (application == null) {
+      LOG.info("Calling allocate on removed " +
+          "or non existant application " + appAttemptId);
+      return EMPTY_ALLOCATION;
+    }
+
+    // Sanity check
+    SchedulerUtils.normalizeRequests(ask, new DominantResourceCalculator(),
+        clusterResource, minimumAllocation, maximumAllocation, incrAllocation);
+
+    // Set amResource for this app
+    if (!application.getUnmanagedAM() && ask.size() == 1
+        && application.getLiveContainers().isEmpty()) {
+      application.setAMResource(ask.get(0).getCapability());
+    }
+
+    // Release containers
+    releaseContainers(release, application);
+
+    synchronized (application) {
+      if (!ask.isEmpty()) {
+        if (LOG.isDebugEnabled()) {
+          LOG.debug("allocate: pre-update" +
+              " applicationAttemptId=" + appAttemptId +
+              " application=" + application.getApplicationId());
+        }
+        application.showRequests();
+
+        // Update application requests
+        application.updateResourceRequests(ask);
+
+        application.showRequests();
+      }
+
+      if (LOG.isDebugEnabled()) {
+        LOG.debug("allocate: post-update" +
+            " applicationAttemptId=" + appAttemptId +
+            " #ask=" + ask.size() +
+            " reservation= " + application.getCurrentReservation());
+
+        LOG.debug("Preempting " + application.getPreemptionContainers().size()
+            + " container(s)");
+      }
+      
+      Set<ContainerId> preemptionContainerIds = new HashSet<ContainerId>();
+      for (RMContainer container : application.getPreemptionContainers()) {
+        preemptionContainerIds.add(container.getContainerId());
+      }
+
+      application.updateBlacklist(blacklistAdditions, blacklistRemovals);
+      ContainersAndNMTokensAllocation allocation =
+          application.pullNewlyAllocatedContainersAndNMTokens();
+      return new Allocation(allocation.getContainerList(),
+        application.getHeadroom(), preemptionContainerIds, null, null,
+        allocation.getNMTokenList());
+    }
+  }
+  
+  void continuousSchedulingAttempt() throws InterruptedException {
+    long start = getClock().getTime();
+    List<NodeId> nodeIdList = new ArrayList<NodeId>(nodes.keySet());
+    // Sort the nodes by space available on them, so that we offer
+    // containers on emptier nodes first, facilitating an even spread. This
+    // requires holding the scheduler lock, so that the space available on a
+    // node doesn't change during the sort.
+    synchronized (this) {
+      Collections.sort(nodeIdList, nodeAvailableResourceComparator);
+    }
+
+    // iterate all nodes
+    for (NodeId nodeId : nodeIdList) {
+      FSSchedulerNode node = getFSSchedulerNode(nodeId);
+      try {
+        if (node != null && Resources.fitsIn(minimumAllocation,
+            node.getAvailableResource())) {
+          attemptScheduling(node);
+        }
+      } catch (Throwable ex) {
+        LOG.error("Error while attempting scheduling for node " + node +
+            ": " + ex.toString(), ex);
+      }
+    }
+
+    long duration = getClock().getTime() - start;
+    fsOpDurations.addContinuousSchedulingRunDuration(duration);
+  }
+
+  /** Sort nodes by available resource */
+  private class NodeAvailableResourceComparator implements Comparator<NodeId> {
+
+    @Override
+    public int compare(NodeId n1, NodeId n2) {
+      if (!nodes.containsKey(n1)) {
+        return 1;
+      }
+      if (!nodes.containsKey(n2)) {
+        return -1;
+      }
+      return RESOURCE_CALCULATOR.compare(clusterResource,
+              nodes.get(n2).getAvailableResource(),
+              nodes.get(n1).getAvailableResource());
+    }
+  }
+
+  /**
+   * Check if preemption is enabled and the utilization threshold for
+   * preemption is met.
+   *
+   * @return true if preemption should be attempted, false otherwise.
+   * true表示抢占应该被尝试
+   */
+  private boolean shouldAttemptPreemption() {
+    if (preemptionEnabled) {
+      return (preemptionUtilizationThreshold < Math.max(
+          (float) rootMetrics.getAllocatedMB() / clusterResource.getMemory(),
+          (float) rootMetrics.getAllocatedVirtualCores() /
+              clusterResource.getVirtualCores()));
+    }
+    return false;
+  }
+
+
+  private void initScheduler(Configuration conf) throws IOException {
+    synchronized (this) {
+      this.conf = new FairSchedulerConfiguration(conf);
+      validateConf(this.conf);
+      minimumAllocation = this.conf.getMinimumAllocation();
+      maximumAllocation = this.conf.getMaximumAllocation();
+      incrAllocation = this.conf.getIncrementAllocation();
+      continuousSchedulingEnabled = this.conf.isContinuousSchedulingEnabled();
+      continuousSchedulingSleepMs =
+          this.conf.getContinuousSchedulingSleepMs();
+      nodeLocalityThreshold = this.conf.getLocalityThresholdNode();
+      rackLocalityThreshold = this.conf.getLocalityThresholdRack();
+      nodeLocalityDelayMs = this.conf.getLocalityDelayNodeMs();
+      rackLocalityDelayMs = this.conf.getLocalityDelayRackMs();
+      preemptionEnabled = this.conf.getPreemptionEnabled();
+      preemptionUtilizationThreshold =
+          this.conf.getPreemptionUtilizationThreshold();
+      assignMultiple = this.conf.getAssignMultiple();
+      maxAssign = this.conf.getMaxAssign();
+      sizeBasedWeight = this.conf.getSizeBasedWeight();
+      preemptionInterval = this.conf.getPreemptionInterval();
+      waitTimeBeforeKill = this.conf.getWaitTimeBeforeKill();
+      usePortForNodeName = this.conf.getUsePortForNodeName();
+
+      updateInterval = this.conf.getUpdateInterval();
+      if (updateInterval < 0) {
+        updateInterval = FairSchedulerConfiguration.DEFAULT_UPDATE_INTERVAL_MS;
+        LOG.warn(FairSchedulerConfiguration.UPDATE_INTERVAL_MS
+            + " is invalid, so using default value " +
+            +FairSchedulerConfiguration.DEFAULT_UPDATE_INTERVAL_MS
+            + " ms instead");
+      }
+
+      rootMetrics = FSQueueMetrics.forQueue("root", null, true, conf);
+      fsOpDurations = FSOpDurations.getInstance(true);
+
+      // This stores per-application scheduling information
+      this.applications = new ConcurrentHashMap<
+          ApplicationId, SchedulerApplication<FSAppAttempt>>();
+      this.eventLog = new FairSchedulerEventLog();
+      eventLog.init(this.conf);
+
+      allocConf = new AllocationConfiguration(conf);
+      try {
+        queueMgr.initialize(conf);
+      } catch (Exception e) {
+        throw new IOException("Failed to start FairScheduler", e);
+      }
+
+      updateThread = new UpdateThread();
+      updateThread.setName("FairSchedulerUpdateThread");
+      updateThread.setDaemon(true);
+
+      if (continuousSchedulingEnabled) {
+        // start continuous scheduling thread
+        schedulingThread = new ContinuousSchedulingThread();
+        schedulingThread.setName("FairSchedulerContinuousScheduling");
+        schedulingThread.setDaemon(true);
+      }
+    }
+
+    allocsLoader.init(conf);
+    allocsLoader.setReloadListener(new AllocationReloadListener());
+    // If we fail to load allocations file on initialize, we want to fail
+    // immediately.  After a successful load, exceptions on future reloads
+    // will just result in leaving things as they are.
+    try {
+      allocsLoader.reloadAllocations();
+    } catch (Exception e) {
+      throw new IOException("Failed to initialize FairScheduler", e);
+    }
+  }
+
+  @Override
+  public synchronized String moveApplication(ApplicationId appId,
+      String queueName) throws YarnException {
+    SchedulerApplication<FSAppAttempt> app = applications.get(appId);
+    if (app == null) {
+      throw new YarnException("App to be moved " + appId + " not found.");
+    }
+    FSAppAttempt attempt = (FSAppAttempt) app.getCurrentAppAttempt();
+    // To serialize with FairScheduler#allocate, synchronize on app attempt
+    synchronized (attempt) {
+      FSLeafQueue oldQueue = (FSLeafQueue) app.getQueue();
+      FSLeafQueue targetQueue = queueMgr.getLeafQueue(queueName, false);
+      if (targetQueue == null) {
+        throw new YarnException("Target queue " + queueName
+            + " not found or is not a leaf queue.");
+      }
+      if (targetQueue == oldQueue) {
+        return oldQueue.getQueueName();
+      }
+      
+      if (oldQueue.getRunnableAppSchedulables().contains(attempt)) {
+        verifyMoveDoesNotViolateConstraints(attempt, oldQueue, targetQueue);
+      }
+      
+      executeMove(app, attempt, oldQueue, targetQueue);
+      return targetQueue.getQueueName();
+    }
+  }
+  
+  private void verifyMoveDoesNotViolateConstraints(FSAppAttempt app,
+      FSLeafQueue oldQueue, FSLeafQueue targetQueue) throws YarnException {
+    String queueName = targetQueue.getQueueName();
+    ApplicationAttemptId appAttId = app.getApplicationAttemptId();
+    // When checking maxResources and maxRunningApps, only need to consider
+    // queues before the lowest common ancestor of the two queues because the
+    // total running apps in queues above will not be changed.
+    FSQueue lowestCommonAncestor = findLowestCommonAncestorQueue(oldQueue,
+        targetQueue);
+    Resource consumption = app.getCurrentConsumption();
+    
+    // Check whether the move would go over maxRunningApps or maxShare
+    FSQueue cur = targetQueue;
+    while (cur != lowestCommonAncestor) {
+      // maxRunningApps
+      if (cur.getNumRunnableApps() == allocConf.getQueueMaxApps(cur.getQueueName())) {
+        throw new YarnException("Moving app attempt " + appAttId + " to queue "
+            + queueName + " would violate queue maxRunningApps constraints on"
+            + " queue " + cur.getQueueName());
+      }
+      
+      // maxShare
+      if (!Resources.fitsIn(Resources.add(cur.getResourceUsage(), consumption),
+          cur.getMaxShare())) {
+        throw new YarnException("Moving app attempt " + appAttId + " to queue "
+            + queueName + " would violate queue maxShare constraints on"
+            + " queue " + cur.getQueueName());
+      }
+      
+      cur = cur.getParent();
+    }
+  }
+  
+  /**
+   * Helper for moveApplication, which has appropriate synchronization, so all
+   * operations will be atomic.
+   */
+  private void executeMove(SchedulerApplication<FSAppAttempt> app,
+      FSAppAttempt attempt, FSLeafQueue oldQueue, FSLeafQueue newQueue) {
+    boolean wasRunnable = oldQueue.removeApp(attempt);
+    // if app was not runnable before, it may be runnable now
+    boolean nowRunnable = maxRunningEnforcer.canAppBeRunnable(newQueue,
+        attempt.getUser());
+    if (wasRunnable && !nowRunnable) {
+      throw new IllegalStateException("Should have already verified that app "
+          + attempt.getApplicationId() + " would be runnable in new queue");
+    }
+    
+    if (wasRunnable) {
+      maxRunningEnforcer.untrackRunnableApp(attempt);
+    } else if (nowRunnable) {
+      // App has changed from non-runnable to runnable
+      maxRunningEnforcer.untrackNonRunnableApp(attempt);
+    }
+    
+    attempt.move(newQueue); // This updates all the metrics
+    app.setQueue(newQueue);
+    newQueue.addApp(attempt, nowRunnable);
+    
+    if (nowRunnable) {
+      maxRunningEnforcer.trackRunnableApp(attempt);
+    }
+    if (wasRunnable) {
+      maxRunningEnforcer.updateRunnabilityOnAppRemoval(attempt, oldQueue);
+    }
+  }
+
+  @VisibleForTesting
+  FSQueue findLowestCommonAncestorQueue(FSQueue queue1, FSQueue queue2) {
+    // Because queue names include ancestors, separated by periods, we can find
+    // the lowest common ancestors by going from the start of the names until
+    // there's a character that doesn't match.
+    String name1 = queue1.getName();
+    String name2 = queue2.getName();
+    // We keep track of the last period we encounter to avoid returning root.apple
+    // when the queues are root.applepie and root.appletart
+    int lastPeriodIndex = -1;
+    for (int i = 0; i < Math.max(name1.length(), name2.length()); i++) {
+      if (name1.length() <= i || name2.length() <= i ||
+          name1.charAt(i) != name2.charAt(i)) {
+        return queueMgr.getQueue(name1.substring(0, lastPeriodIndex));
+      } else if (name1.charAt(i) == '.') {
+        lastPeriodIndex = i;
+      }
+    }
+    return queue1; // names are identical
+  }
+  

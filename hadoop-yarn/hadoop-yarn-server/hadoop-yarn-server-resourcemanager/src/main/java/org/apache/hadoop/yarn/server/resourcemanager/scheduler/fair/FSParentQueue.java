@@ -104,12 +104,14 @@ public class FSParentQueue extends FSQueue {
     return usage;
   }
 
+  //更新队列需要的需求资源量
   @Override
   public void updateDemand() {
+	  //计算该队列下所有的app需要的资源,限制资源到最大的资源
     // Compute demand by iterating through apps in the queue
     // Limit demand to maxResources
     Resource maxRes = scheduler.getAllocationConfiguration()
-        .getMaxResources(getName());
+        .getMaxResources(getName());//获取该队列最大的资源
     demand = Resources.createResource(0);
     for (FSQueue childQueue : childQueues) {
       childQueue.updateDemand();
@@ -121,7 +123,7 @@ public class FSParentQueue extends FSQueue {
       }
       demand = Resources.add(demand, toAdd);
       demand = Resources.componentwiseMin(demand, maxRes);
-      if (Resources.equals(demand, maxRes)) {
+      if (Resources.equals(demand, maxRes)) {//达到上限了,则停止循环
         break;
       }
     }
@@ -163,6 +165,7 @@ public class FSParentQueue extends FSQueue {
     return userAcls;
   }
 
+  //为该node分配一个容器
   @Override
   public Resource assignContainer(FSSchedulerNode node) {
     Resource assigned = Resources.none();
@@ -172,21 +175,24 @@ public class FSParentQueue extends FSQueue {
       return assigned;
     }
 
+    //按照队列的策略排序,然后依次分配应用到该node上
     Collections.sort(childQueues, policy.getComparator());
     for (FSQueue child : childQueues) {
       assigned = child.assignContainer(node);
-      if (!Resources.equals(assigned, Resources.none())) {
+      if (!Resources.equals(assigned, Resources.none())) {//说明已经分配到资源了,则返回
         break;
       }
     }
     return assigned;
   }
 
+  //竞选一个容器
   @Override
   public RMContainer preemptContainer() {
     RMContainer toBePreempted = null;
 
     // Find the childQueue which is most over fair share
+    //找到一个最有优势的容器
     FSQueue candidateQueue = null;
     Comparator<Schedulable> comparator = policy.getComparator();
     for (FSQueue queue : childQueues) {
@@ -215,8 +221,8 @@ public class FSParentQueue extends FSQueue {
         SchedulingPolicy.isApplicableTo(policy, (parent == null)
             ? SchedulingPolicy.DEPTH_ROOT
             : SchedulingPolicy.DEPTH_INTERMEDIATE);
-    if (!allowed) {
-      throwPolicyDoesnotApplyException(policy);
+    if (!allowed) {//不允许该调度策略
+      throwPolicyDoesnotApplyException(policy);//抛异常
     }
     super.policy = policy;
   }

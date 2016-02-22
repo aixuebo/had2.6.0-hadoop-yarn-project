@@ -151,8 +151,8 @@ public abstract class SchedulingPolicy {
    * steady share is not used for scheduling, it is displayed on the Web UI
    * for better visibility.
    *
-   * @param queues {@link FSQueue}s whose shares are to be updated
-   * @param totalResources Total {@link Resource}s in the cluster
+   * @param queues {@link FSQueue}s whose shares are to be updated 该队列的子队列集合
+   * @param totalResources Total {@link Resource}s in the cluster 集群总资源
    */
   public abstract void computeSteadyShares(
       Collection<? extends FSQueue> queues, Resource totalResources);

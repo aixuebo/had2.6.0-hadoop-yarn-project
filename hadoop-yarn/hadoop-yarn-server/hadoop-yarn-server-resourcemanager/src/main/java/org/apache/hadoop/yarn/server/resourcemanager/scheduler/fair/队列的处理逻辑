@@ -1,0 +1,126 @@
+fair队列调度器
+一、NODE_ADDED事件
+1.addNode(nodeAddedEvent.getAddedRMNode());
+a.在调度器中添加节点映射,nodes.put(node.getNodeID(), new FSSchedulerNode(node, usePortForNodeName));
+b.增加总集群的资源,Resources.addTo(clusterResource, node.getTotalCapability());
+c.根据最新的集群总资源,重新分配root以及所有的队列的SteadyFairShare
+    queueMgr.getRootQueue().setSteadyFairShare(clusterResource);
+    queueMgr.getRootQueue().recomputeSteadyShares();
+
+2.recoverContainersOnNode(List<NMContainerStatus> containerReports,RMNode);//父类
+  恢复该节点上的一些容器状态
+
+
+二、NODE_REMOVED
+1.removeNode(nodeRemovedEvent.getRemovedRMNode());
+a.重新计算集群总资源,Resources.subtractFrom(clusterResource, rmNode.getTotalCapability());
+b.获取当前该节点在调度器中正在运行的容器集合,将其kill
+c.获取当前该节点在调度器中正在node.getReservedContainer()容器,将其kill
+d.移除该node在调度器中的映射nodes.remove(rmNode.getNodeID());
+e.根据最新的集群总资源,重新分配root以及所有的队列的SteadyFairShare
+    queueMgr.getRootQueue().setSteadyFairShare(clusterResource);
+    queueMgr.getRootQueue().recomputeSteadyShares();
+
+三、NODE_UPDATE
+1.nodeUpdate(nodeUpdatedEvent.getRMNode()); 一个node节点发送心跳给调度器
+a.从node上获取该node上当前已经完成的容器集合、当前刚刚启动的容器集合
+b.处理已经启动的容器
+    for (ContainerStatus launchedContainer : newlyLaunchedContainers) {
+      containerLaunchedOnNode(launchedContainer.getContainerId(), node);//父类
+    }
+c.处理已经完成的容器
+    for (ContainerStatus completedContainer : completedContainers) {
+      ContainerId containerId = completedContainer.getContainerId();
+      completedContainer(getRMContainer(containerId),
+          completedContainer, RMContainerEventType.FINISHED);//参见下面
+    }
+d.attemptScheduling(node);//见下面
+ 在该node上继续分配容器去执行
+
+四、NODE_RESOURCE_UPDATE 当节点增加了内存或者减少内存的时候调用该事件
+1.重新更新集群总资源,先减去老资源,再加上新资源
+2.根据最新的集群总资源,重新分配root以及所有的队列的SteadyFairShare
+    queueMgr.getRootQueue().setSteadyFairShare(clusterResource);
+    queueMgr.getRootQueue().recomputeSteadyShares();
+
+五、APP_ADDED 一个应用提交到队列中
+1.addApplication(appAddedEvent.getApplicationId(),appAddedEvent.getQueue(), appAddedEvent.getUser(),appAddedEvent.getIsAppRecovering());
+a.重新分配该队列,将该app分配到一个叶子队列中,有可能与请求的队列不一致。
+  FSLeafQueue queue = assignToQueue(rmApp, queueName, user);
+b.校验该队列的访问权限是否允许
+c.创建SchedulerApplication<FSAppAttempt> application = new SchedulerApplication<FSAppAttempt>(queue, user);
+  并且添加映射关系applications.put(applicationId, application);
+d.发送事件
+  rmContext.getDispatcher().getEventHandler().handle(new RMAppEvent(applicationId, RMAppEventType.APP_ACCEPTED));
+
+六、APP_REMOVED 移除一个app
+1.removeApplication(appRemovedEvent.getApplicationID(),appRemovedEvent.getFinalState());
+a.application.stop(finalState);
+b.移除映射关系 applications.remove(applicationId);
+
+
+七、APP_ATTEMPT_ADDED 创建一个AM
+1.addApplicationAttempt(appAttemptAddedEvent.getApplicationAttemptId(),appAttemptAddedEvent.getTransferStateFromPreviousAttempt(),appAttemptAddedEvent.getIsAttemptRecovering());
+a.FSAppAttempt attempt = new FSAppAttempt(this, applicationAttemptId, user,queue, new ActiveUsersManager(getRootQueueMetrics()),rmContext);
+  创建一个尝试任务
+b.    if (transferStateFromPreviousAttempt) {
+      attempt.transferStateFromPreviousAttempt(application.getCurrentAppAttempt());
+    }
+c.application.setCurrentAppAttempt(attempt); 为job设置一个当前的尝试任务
+d.判断app是否可以运行
+    boolean runnable = maxRunningEnforcer.canAppBeRunnable(queue, user);
+    queue.addApp(attempt, runnable);
+    if (runnable) {
+      maxRunningEnforcer.trackRunnableApp(attempt);
+    } else {
+      maxRunningEnforcer.trackNonRunnableApp(attempt);
+    }
+e.发送事件
+rmContext.getDispatcher().getEventHandler().handle(new RMAppAttemptEvent(applicationAttemptId,RMAppAttemptEventType.ATTEMPT_ADDED));
+
+八、APP_ATTEMPT_REMOVED,移除一个AM
+1.removeApplicationAttempt(appAttemptRemovedEvent.getApplicationAttemptID(),appAttemptRemovedEvent.getFinalAttemptState(),appAttemptRemovedEvent.getKeepContainersAcrossAppAttempts());
+a.删除AM上活着的容器,注意如果keepContainers=true,则对正在运行的容器不进行删除
+b.释放该app上所有的预留容器
+c.attempt.stop(rmAppAttemptFinalState);释放该app尝试任务AM
+d.队列的统计信息
+    FSLeafQueue queue = queueMgr.getLeafQueue(attempt.getQueue()
+        .getQueueName(), false);
+    boolean wasRunnable = queue.removeApp(attempt);
+
+    if (wasRunnable) {
+      maxRunningEnforcer.untrackRunnableApp(attempt);
+      maxRunningEnforcer.updateRunnabilityOnAppRemoval(attempt,
+          attempt.getQueue());
+    } else {
+      maxRunningEnforcer.untrackNonRunnableApp(attempt);
+    }
+
+九、CONTAINER_EXPIRED
+容器过期,则调用kill容器即可
+
+        
+
+-公共类-------------------
+1.protected synchronized void completedContainer(RMContainer rmContainer,ContainerStatus containerStatus, RMContainerEventType event) {
+说明该容器已经完成了,完成的状态以及完成的事件
+a.在调度器中获取FSAppAttempt,该容器对应的尝试任务。
+b.在调度器中获取FSSchedulerNode,该容器对应的node。
+c.如果该容器是预留容器,则调用取消预留即可
+if (rmContainer.getState() == RMContainerState.RESERVED) {
+  application.unreserve(rmContainer.getReservedPriority(), node);
+} else {
+      application.containerCompleted(rmContainer, containerStatus, event);通知应用完成了该容器
+      node.releaseContainer(container);节点释放该容器
+    }
+2.attemptScheduling(FSSchedulerNode node) {在该node上可以尝试调度任务
+a.如果该节点上有预留的容器,则找到容器对应的app
+FSAppAttempt reservedAppSchedulable = node.getReservedAppSchedulable();
+Priority reservedPriority = node.getReservedContainer().getReservedPriority();获取该节点上预留容器对应的优先级。
+查看该优先级、该app能否在该node上分配任务
+如果能,则调用该app的.assignReservedContainer(node);方法,即向该node分配预留的容器
+如果不能.则取消该app在该node上的预留容器。即该node上不再预留容器 
+b.不断的向该node分配容器,从root队列上获取容器,分配给该node
+if (!queueMgr.getRootQueue().assignContainer(node).equals(Resources.none())) {//说明向该node分配了容器
+即该node上的资源都分配给队列,让队列分配出容器给node执行。
+

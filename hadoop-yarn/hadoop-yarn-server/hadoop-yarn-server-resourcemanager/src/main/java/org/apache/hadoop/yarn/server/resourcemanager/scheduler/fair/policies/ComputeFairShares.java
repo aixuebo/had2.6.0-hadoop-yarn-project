@@ -40,7 +40,7 @@ public class ComputeFairShares {
    * Compute fair share of the given schedulables.Fair share is an allocation of
    * shares considering only active schedulables ie schedulables which have
    * running apps.
-   * 
+   * 这部分仅仅考虑活跃的调度器,比如有正在运行的app的队列
    * @param schedulables
    * @param totalResources
    * @param type
@@ -55,10 +55,10 @@ public class ComputeFairShares {
    * Compute the steady fair share of the given queues. The steady fair
    * share is an allocation of shares considering all queues, i.e.,
    * active and inactive.
-   *
-   * @param queues
-   * @param totalResources
-   * @param type
+   * 这部分考虑所有的调度器队列,包括活跃的和不活跃的队列
+   * @param queues 该队列的子队列集合
+   * @param totalResources 集群总资源
+   * @param type 按照内存还是cpu来计算
    */
   public static void computeSteadyShares(
       Collection<? extends FSQueue> queues, Resource totalResources,
@@ -111,17 +111,24 @@ public class ComputeFairShares {
       Collection<? extends Schedulable> allSchedulables,
       Resource totalResources, ResourceType type, boolean isSteadyShare) {
 
+	  //非固定的队列集合
     Collection<Schedulable> schedulables = new ArrayList<Schedulable>();
+    
+    //为固定的队列集合分配信息
     int takenResources = handleFixedFairShares(
         allSchedulables, schedulables, isSteadyShare, type);
 
     if (schedulables.isEmpty()) {
       return;
     }
+    
+    //向未固定的队列分配资源
+    //找到最上面的约束R,我们能够使用在我们的二元搜索中
+    //我们开始为R=1,然后两倍处理,直到我们使用了所有的资源 或者我们使用了所有调度资源的最大share
     // Find an upper bound on R that we can use in our binary search. We start
     // at R = 1 and double it until we have either used all the resources or we
     // have met all Schedulables' max shares.
-    int totalMaxShare = 0;
+    int totalMaxShare = 0;//所有调度器的最大share
     for (Schedulable sched : schedulables) {
       int maxShare = getResourceValue(sched.getMaxShare(), type);
       totalMaxShare = (int) Math.min((long)maxShare + (long)totalMaxShare,
@@ -131,16 +138,18 @@ public class ComputeFairShares {
       }
     }
 
+    //剩余的总资源
     int totalResource = Math.max((getResourceValue(totalResources, type) -
         takenResources), 0);
     totalResource = Math.min(totalMaxShare, totalResource);
 
-    double rMax = 1.0;
+    double rMax = 1.0;//获取权重比例,即每一个权重应该*多少系数
     while (resourceUsedWithWeightToResourceRatio(rMax, schedulables, type)
         < totalResource) {
       rMax *= 2.0;
     }
     // Perform the binary search for up to COMPUTE_FAIR_SHARES_ITERATIONS steps
+    //计算收敛值R,即right
     double left = 0;
     double right = rMax;
     for (int i = 0; i < COMPUTE_FAIR_SHARES_ITERATIONS; i++) {
@@ -148,7 +157,7 @@ public class ComputeFairShares {
       int plannedResourceUsed = resourceUsedWithWeightToResourceRatio(
           mid, schedulables, type);
       if (plannedResourceUsed == totalResource) {
-        right = mid;
+        right = mid;//收敛
         break;
       } else if (plannedResourceUsed < totalResource) {
         left = mid;
@@ -156,6 +165,9 @@ public class ComputeFairShares {
         right = mid;
       }
     }
+    
+    //真正为未固定的队列分配资源
+    //最终公平分享的值是基于收敛的R,即right
     // Set the fair shares based on the value of R we've converged to
     for (Schedulable sched : schedulables) {
       if (isSteadyShare) {
@@ -171,12 +183,13 @@ public class ComputeFairShares {
   /**
    * Compute the resources that would be used given a weight-to-resource ratio
    * w2rRatio, for use in the computeFairShares algorithm as described in #
+   * 计算按照一定比例w2rRatio,所有的调度队列集合schedulables按照优先级之后会分配多少资源
    */
   private static int resourceUsedWithWeightToResourceRatio(double w2rRatio,
       Collection<? extends Schedulable> schedulables, ResourceType type) {
     int resourcesTaken = 0;
     for (Schedulable sched : schedulables) {
-      int share = computeShare(sched, w2rRatio, type);
+      int share = computeShare(sched, w2rRatio, type);//计算该调度队列的权重以及比例后,应该分享多少资源
       resourcesTaken += share;
     }
     return resourcesTaken;
@@ -185,12 +198,13 @@ public class ComputeFairShares {
   /**
    * Compute the resources assigned to a Schedulable given a particular
    * weight-to-resource ratio w2rRatio.
+   * 计算分配给该调度队列的资源,通过权重 * 给定比例
    */
   private static int computeShare(Schedulable sched, double w2rRatio,
       ResourceType type) {
-    double share = sched.getWeights().getWeight(type) * w2rRatio;
-    share = Math.max(share, getResourceValue(sched.getMinShare(), type));
-    share = Math.min(share, getResourceValue(sched.getMaxShare(), type));
+    double share = sched.getWeights().getWeight(type) * w2rRatio;//根据该队列的一定权重 * 相应的比例,获取该队列应该分多少资源
+    share = Math.max(share, getResourceValue(sched.getMinShare(), type));//确保max(share,sched.getMinShare())
+    share = Math.min(share, getResourceValue(sched.getMaxShare(), type));//再次确保min(share,sched.getMaxShare())
     return (int) share;
   }
 
@@ -198,6 +212,8 @@ public class ComputeFairShares {
    * Helper method to handle Schedulabes with fixed fairshares.
    * Returns the resources taken by fixed fairshare schedulables,
    * and adds the remaining to the passed nonFixedSchedulables.
+   * 1.设置固定的队列大小,并且累加到totalResource变量中
+   * 2.将非固定队列大小的队列添加到nonFixedSchedulables集合中
    */
   private static int handleFixedFairShares(
       Collection<? extends Schedulable> schedulables,
@@ -224,9 +240,11 @@ public class ComputeFairShares {
 
   /**
    * Get the fairshare for the {@link Schedulable} if it is fixed, -1 otherwise.
-   *
+   * 如果一个队列是固定的,则设置该资源值,否则返回-1
+   * 
    * The fairshare is fixed if either the maxShare is 0, weight is 0,
    * or the Schedulable is not active for instantaneous fairshare.
+   * 如果maxShare is 0 或者 weight is 0 或者调度队列不是活跃的,表示他是一个固定队列
    */
   private static int getFairShareIfFixed(Schedulable sched,
       boolean isSteadyShare, ResourceType type) {
@@ -238,11 +256,11 @@ public class ComputeFairShares {
 
     // For instantaneous fairshares, check if queue is active
     if (!isSteadyShare &&
-        (sched instanceof FSQueue) && !((FSQueue)sched).isActive()) {
+        (sched instanceof FSQueue) && !((FSQueue)sched).isActive()) {//不是活跃的,肯定返回值是0
       return 0;
     }
 
-    // Check if weight is 0
+    // Check if weight is 0 如果权重是0,则获取他的最小资源值
     if (sched.getWeights().getWeight(type) <= 0) {
       int minShare = getResourceValue(sched.getMinShare(), type);
       return (minShare <= 0) ? 0 : minShare;
@@ -251,6 +269,7 @@ public class ComputeFairShares {
     return -1;
   }
 
+  //获取资源对应的值
   private static int getResourceValue(Resource resource, ResourceType type) {
     switch (type) {
     case MEMORY:
@@ -262,6 +281,7 @@ public class ComputeFairShares {
     }
   }
   
+  //为资源设置一定的值
   private static void setResourceValue(int val, Resource resource, ResourceType type) {
     switch (type) {
     case MEMORY:

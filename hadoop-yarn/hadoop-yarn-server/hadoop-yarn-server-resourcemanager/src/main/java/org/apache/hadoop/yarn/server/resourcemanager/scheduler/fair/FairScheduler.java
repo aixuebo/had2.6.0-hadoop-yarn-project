@@ -154,17 +154,17 @@ public class FairScheduler extends
   private long lastPreemptCheckTime;
 
   // Preemption related variables
-  protected boolean preemptionEnabled;
-  protected float preemptionUtilizationThreshold;
-
+  protected boolean preemptionEnabled;//是否打开抢占资源开关
+  protected float preemptionUtilizationThreshold;//抢占资源的阀值,该值小于一定数值的时候则触发抢占
   // How often tasks are preempted
-  protected long preemptionInterval; 
+  protected long preemptionInterval; //抢占资源的时间间隔,至少过去多久才能抢占一次
   
   // ms to wait before force killing stuff (must be longer than a couple
   // of heartbeats to give task-kill commands a chance to act).
   protected long waitTimeBeforeKill; 
   
   // Containers whose AMs have been warned that they will be preempted soon.
+  //AM已经被警告,这些容器后期会被抢占的
   private List<RMContainer> warnedContainers = new ArrayList<RMContainer>();
   
   protected boolean sizeBasedWeight; // Give larger weights to larger jobs
@@ -179,8 +179,8 @@ public class FairScheduler extends
   protected long rackLocalityDelayMs; // Delay for rack locality
   private FairSchedulerEventLog eventLog; // Machine-readable event log
   protected boolean assignMultiple; // Allocate multiple containers per
-                                    // heartbeat
-  protected int maxAssign; // Max containers to assign per heartbeat
+                                    // heartbeat,true表示一次心跳可以分配多个容器
+  protected int maxAssign; // Max containers to assign per heartbeat 每一次心跳最多可能分配的容器数量
 
   @VisibleForTesting
   final MaxRunningAppsEnforcer maxRunningEnforcer;
@@ -350,18 +350,21 @@ public class FairScheduler extends
     }
 
     long curTime = getClock().getTime();
-    if (curTime - lastPreemptCheckTime < preemptionInterval) {
+    if (curTime - lastPreemptCheckTime < preemptionInterval) {//距离上次抢占已经过去不久
       return;
     }
+    
+    //距离上次抢占已经过去很久了
+    //设置上次抢占时间
     lastPreemptCheckTime = curTime;
 
-    Resource resToPreempt = Resources.clone(Resources.none());
-    for (FSLeafQueue sched : queueMgr.getLeafQueues()) {
+    Resource resToPreempt = Resources.clone(Resources.none());//最终抢占的请求
+    for (FSLeafQueue sched : queueMgr.getLeafQueues()) {//循环所有的叶子节点,添加抢占的请求资源
       Resources.addTo(resToPreempt, resToPreempt(sched, curTime));
     }
     if (Resources.greaterThan(RESOURCE_CALCULATOR, clusterResource, resToPreempt,
-        Resources.none())) {
-      preemptResources(resToPreempt);
+        Resources.none())) {//说明抢占的请求大于0
+      preemptResources(resToPreempt);//执行抢占资源
     }
   }
 
@@ -375,6 +378,7 @@ public class FairScheduler extends
    * Inside each application, we further prioritize preemption by choosing
    * containers with lowest priority to preempt.
    * We make sure that no queue is placed below its fair share in the process.
+   * 抢占资源
    */
   protected void preemptResources(Resource toPreempt) {
     long start = getClock().getTime();
@@ -385,6 +389,7 @@ public class FairScheduler extends
     // Scan down the list of containers we've already warned and kill them
     // if we need to.  Remove any containers from the list that we don't need
     // or that are no longer running.
+    //循环警告的容器
     Iterator<RMContainer> warnedIter = warnedContainers.iterator();
     while (warnedIter.hasNext()) {
       RMContainer container = warnedIter.next();
@@ -433,6 +438,9 @@ public class FairScheduler extends
     fsOpDurations.addPreemptCallDuration(duration);
   }
   
+  /**
+   * 该容器所在的队列资源被抢占回来了
+   */
   protected void warnOrKillContainer(RMContainer container) {
     ApplicationAttemptId appAttemptId = container.getApplicationAttemptId();
     FSAppAttempt app = getSchedulerApp(appAttemptId);
@@ -446,7 +454,10 @@ public class FairScheduler extends
     if (time != null) {
       // if we asked for preemption more than maxWaitTimeBeforeKill ms ago,
       // proceed with kill
+    	//如果我们请求的抢占花费了很久时间,则kill处理该容器
       if (time + waitTimeBeforeKill < getClock().getTime()) {
+    	  
+    	//容器被抢占了,因此状态是被抢占了
         ContainerStatus status =
           SchedulerUtils.createPreemptedContainerStatus(
             container.getContainerId(), SchedulerUtils.PREEMPTED_CONTAINER);
@@ -509,7 +520,7 @@ public class FairScheduler extends
     return rmContext.getContainerTokenSecretManager();
   }
 
-  // synchronized for sizeBasedWeight
+  // synchronized for sizeBasedWeight 设置app的权重
   public synchronized ResourceWeights getAppWeight(FSAppAttempt app) {
     double weight = 1.0;
     if (sizeBasedWeight) {
@@ -578,7 +589,7 @@ public class FairScheduler extends
    */
   protected synchronized void addApplication(ApplicationId applicationId,
       String queueName, String user, boolean isAppRecovering) {
-    if (queueName == null || queueName.isEmpty()) {
+    if (queueName == null || queueName.isEmpty()) {//校验队列是否正确
       String message = "Reject application " + applicationId +
               " submitted by user " + user + " with an empty queue name.";
       LOG.info(message);
@@ -587,6 +598,7 @@ public class FairScheduler extends
       return;
     }
 
+    //重新分配该队列
     RMApp rmApp = rmContext.getRMApps().get(applicationId);
     FSLeafQueue queue = assignToQueue(rmApp, queueName, user);
     if (queue == null) {
@@ -626,6 +638,7 @@ public class FairScheduler extends
 
   /**
    * Add a new application attempt to the scheduler.
+   * AM添加一个尝试任务到该队列
    */
   protected synchronized void addApplicationAttempt(
       ApplicationAttemptId applicationAttemptId,
@@ -644,8 +657,10 @@ public class FairScheduler extends
       attempt.transferStateFromPreviousAttempt(application
           .getCurrentAppAttempt());
     }
+    //为当前任务设置尝试任务
     application.setCurrentAppAttempt(attempt);
 
+    //判断是否能运行
     boolean runnable = maxRunningEnforcer.canAppBeRunnable(queue, user);
     queue.addApp(attempt, runnable);
     if (runnable) {
@@ -674,6 +689,7 @@ public class FairScheduler extends
   /**
    * Helper method that attempts to assign the app to a queue. The method is
    * responsible to call the appropriate event-handler if the app is rejected.
+   * 有可能重新为该app分配队列
    */
   @VisibleForTesting
   FSLeafQueue assignToQueue(RMApp rmApp, String queueName, String user) {
@@ -722,6 +738,7 @@ public class FairScheduler extends
     applications.remove(applicationId);
   }
 
+  //该AM要删除
   private synchronized void removeApplicationAttempt(
       ApplicationAttemptId applicationAttemptId,
       RMAppAttemptState rmAppAttemptFinalState, boolean keepContainers) {
@@ -736,7 +753,7 @@ public class FairScheduler extends
       return;
     }
 
-    // Release all the running containers
+    // Release all the running containers删除AM上活着的容器,注意如果keepContainers=true,则对正在运行的容器不进行删除
     for (RMContainer rmContainer : attempt.getLiveContainers()) {
       if (keepContainers
           && rmContainer.getState().equals(RMContainerState.RUNNING)) {
@@ -752,7 +769,7 @@ public class FairScheduler extends
               RMContainerEventType.KILL);
     }
 
-    // Release all reserved containers
+    // Release all reserved containers 释放该app上所有的预留容器
     for (RMContainer rmContainer : attempt.getReservedContainers()) {
       completedContainer(rmContainer,
           SchedulerUtils.createAbnormalContainerStatus(
@@ -760,7 +777,7 @@ public class FairScheduler extends
               "Application Complete"),
               RMContainerEventType.KILL);
     }
-    // Clean up pending requests, metrics etc.
+    // Clean up pending requests, metrics etc. 释放该app尝试任务AM
     attempt.stop(rmAppAttemptFinalState);
 
     // Inform the queue
@@ -931,6 +948,7 @@ public class FairScheduler extends
   
   /**
    * Process a heartbeat update from a node.
+   * 一个node节点发送心跳给调度器
    */
   private synchronized void nodeUpdate(RMNode nm) {
     long start = getClock().getTime();
@@ -940,19 +958,22 @@ public class FairScheduler extends
     eventLog.log("HEARTBEAT", nm.getHostName());
     FSSchedulerNode node = getFSSchedulerNode(nm.getNodeID());
     
-    List<UpdatedContainerInfo> containerInfoList = nm.pullContainerUpdates();
-    List<ContainerStatus> newlyLaunchedContainers = new ArrayList<ContainerStatus>();
-    List<ContainerStatus> completedContainers = new ArrayList<ContainerStatus>();
+    List<UpdatedContainerInfo> containerInfoList = nm.pullContainerUpdates();//拉去数据
+    List<ContainerStatus> newlyLaunchedContainers = new ArrayList<ContainerStatus>();//最新启动的容器
+    List<ContainerStatus> completedContainers = new ArrayList<ContainerStatus>();//已经完成的容器
+    
     for(UpdatedContainerInfo containerInfo : containerInfoList) {
       newlyLaunchedContainers.addAll(containerInfo.getNewlyLaunchedContainers());
       completedContainers.addAll(containerInfo.getCompletedContainers());
-    } 
-    // Processing the newly launched containers
+    }
+    
+    
+    // Processing the newly launched containers 处理已经启动的容器
     for (ContainerStatus launchedContainer : newlyLaunchedContainers) {
       containerLaunchedOnNode(launchedContainer.getContainerId(), node);
     }
 
-    // Process completed containers
+    // Process completed containers 处理已经完成的容器
     for (ContainerStatus completedContainer : completedContainers) {
       ContainerId containerId = completedContainer.getContainerId();
       LOG.debug("Container FINISHED: " + containerId);
@@ -1018,6 +1039,9 @@ public class FairScheduler extends
     }
   }
   
+  /**
+   * 在该node上可以尝试调度任务
+   */
   private synchronized void attemptScheduling(FSSchedulerNode node) {
     if (rmContext.isWorkPreservingRecoveryEnabled()
         && !rmContext.isSchedulerReadyForAllocatingContainers()) {
@@ -1031,14 +1055,14 @@ public class FairScheduler extends
     FSAppAttempt reservedAppSchedulable = node.getReservedAppSchedulable();
     if (reservedAppSchedulable != null) {
       Priority reservedPriority = node.getReservedContainer().getReservedPriority();
-      if (!reservedAppSchedulable.hasContainerForNode(reservedPriority, node)) {
+      if (!reservedAppSchedulable.hasContainerForNode(reservedPriority, node)) {//如果不能.则取消该app在该node上的预留容器。即该node上不再预留容器 
         // Don't hold the reservation if app can no longer use it
         LOG.info("Releasing reservation that cannot be satisfied for application "
             + reservedAppSchedulable.getApplicationAttemptId()
             + " on node " + node);
         reservedAppSchedulable.unreserve(reservedPriority, node);
         reservedAppSchedulable = null;
-      } else {
+      } else {//如果能,则调用该app的.assignReservedContainer(node);方法,即向该node分配预留的容器
         // Reservation exists; try to fulfill the reservation
         if (LOG.isDebugEnabled()) {
           LOG.debug("Trying to fulfill reservation for application "
@@ -1051,17 +1075,17 @@ public class FairScheduler extends
     }
     if (reservedAppSchedulable == null) {
       // No reservation, schedule at queue which is farthest below fair share
-      int assignedContainers = 0;
+      int assignedContainers = 0;//计算已经分配了多少个容器
       while (node.getReservedContainer() == null) {
         boolean assignedContainer = false;
         if (!queueMgr.getRootQueue().assignContainer(node).equals(
-            Resources.none())) {
+            Resources.none())) {//说明向该node分配了容器
           assignedContainers++;
           assignedContainer = true;
         }
-        if (!assignedContainer) { break; }
-        if (!assignMultiple) { break; }
-        if ((assignedContainers >= maxAssign) && (maxAssign > 0)) { break; }
+        if (!assignedContainer) { break; }//false表示root队列没有分配任务,因此break
+        if (!assignMultiple) { break; }//true表示一次心跳可以分配多个容器,false表示只能分配一个容器,因此break
+        if ((assignedContainers >= maxAssign) && (maxAssign > 0)) { break; }//当分配的容器数量 > 每一次心跳最多可能分配的容器数量,则break
       }
     }
     updateRootQueueMetrics();
@@ -1092,6 +1116,7 @@ public class FairScheduler extends
    * preemption is met.
    *
    * @return true if preemption should be attempted, false otherwise.
+   * true表示抢占应该被尝试
    */
   private boolean shouldAttemptPreemption() {
     if (preemptionEnabled) {
