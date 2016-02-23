@@ -1,0 +1,60 @@
+SchedulerApplicationAttempt 
+在调度器的视图角度下.该类表示一个应用的尝试任务
+每一个运行的app尝试任务,在ResourceManager下都拥有一个该实例
+
+全局属性
+  private static final long MEM_AGGREGATE_ALLOCATION_CACHE_MSECS = 3000;
+  protected long lastMemoryAggregateAllocationUpdateTime = 0;
+  private long lastMemorySeconds = 0;
+  private long lastVcoreSeconds = 0;
+
+  protected final AppSchedulingInfo appSchedulingInfo;//对该应用的全局信息
+  
+  protected Map<ContainerId, RMContainer> liveContainers = new HashMap<ContainerId, RMContainer>();
+  protected final Map<Priority, Map<NodeId, RMContainer>> reservedContainers = new HashMap<Priority, Map<NodeId, RMContainer>>(); 
+
+  private final Multiset<Priority> reReservations = HashMultiset.create();
+  
+  protected final Resource currentReservation = Resource.newInstance(0, 0);
+  //资源限制,不能超过该限制
+  private Resource resourceLimit = Resource.newInstance(0, 0);
+  protected Resource currentConsumption = Resource.newInstance(0, 0);
+  private Resource amResource = Resources.none();
+  private boolean unmanagedAM = true;
+  private boolean amRunning = false;
+  private LogAggregationContext logAggregationContext;
+
+  //该资源调度器上为该app分配的容器,这些容器还没有真正分配到AM上,暂时仅仅存在在调度器中
+  protected List<RMContainer> newlyAllocatedContainers = new ArrayList<RMContainer>(); 
+
+  // This pendingRelease is used in work-preserving recovery scenario to keep
+  // track of the AM's outstanding release requests. RM on recovery could
+  // receive the release request form AM before it receives the container status
+  // from NM for recovery. In this case, the to-be-recovered containers reported
+  // by NM should not be recovered.
+  private Set<ContainerId> pendingRelease = null;
+
+  /**
+   * Count how many times the application has been given an opportunity
+   * to schedule a task at each priority. Each time the scheduler
+   * asks the application for a task at this priority, it is incremented,
+   * and each time the application successfully schedules a task, it
+   * is reset to 0.
+   */
+  Multiset<Priority> schedulingOpportunities = HashMultiset.create();
+  
+  // Time of the last container scheduled at the current allowed level
+  protected Map<Priority, Long> lastScheduledContainer =
+      new HashMap<Priority, Long>();
+
+  protected Queue queue;
+  protected boolean isStopped = false;
+  
+  protected final RMContext rmContext;
+
+方法
+1.public long getNewContainerId() 生成一个容器的ID的自增长部分
+2.
+
+
+

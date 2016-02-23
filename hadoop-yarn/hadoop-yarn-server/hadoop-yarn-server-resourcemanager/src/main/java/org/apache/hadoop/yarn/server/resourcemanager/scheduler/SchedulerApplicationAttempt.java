@@ -65,7 +65,7 @@ import com.google.common.collect.Multiset;
  * Each running app attempt in the RM corresponds to one instance
  * of this class.
  * 在调度器的视图角度下.该类表示一个应用的尝试任务
- * 每一个运行的app尝试任务,在ResourceManager下都拥有一个该实力
+ * 每一个运行的app尝试任务,在ResourceManager下都拥有一个该实例
  */
 @Private
 @Unstable

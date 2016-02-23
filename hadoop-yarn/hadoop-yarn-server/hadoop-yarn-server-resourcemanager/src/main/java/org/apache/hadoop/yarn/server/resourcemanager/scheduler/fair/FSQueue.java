@@ -258,10 +258,14 @@ public abstract class FSQueue implements Queue, Schedulable {
   
   /**
    * Helper method to check if the queue should attempt assigning resources
-   * 
+   * 帮助方法,检查队列是否应该尝试分配资源
    * @return true if check passes (can assign) or false otherwise
+   * true表示可以为该Node分配容器
    */
   protected boolean assignContainerPreCheck(FSSchedulerNode node) {
+	  
+	//getResourceUsage()>getMaxResources(getName()),则返回false
+	//node.getReservedContainer() != null,则返回false
     if (!Resources.fitsIn(getResourceUsage(),
         scheduler.getAllocationConfiguration().getMaxResources(getName()))
         || node.getReservedContainer() != null) {

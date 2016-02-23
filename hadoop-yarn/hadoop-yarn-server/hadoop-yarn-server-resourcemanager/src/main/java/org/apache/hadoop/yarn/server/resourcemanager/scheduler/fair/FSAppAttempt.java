@@ -542,6 +542,7 @@ public class FSAppAttempt extends SchedulerApplicationAttempt
       LOG.debug("Node offered to app: " + getName() + " reserved: " + reserved);
     }
 
+    //reserved=true,返回预存的容器对应的优先级
     Collection<Priority> prioritiesToTry = (reserved) ?
         Arrays.asList(node.getReservedContainer().getReservedPriority()) :
         getPriorities();

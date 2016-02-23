@@ -53,7 +53,7 @@ import org.apache.hadoop.yarn.util.resource.Resources;
 public class AppSchedulingInfo {
   
   private static final Log LOG = LogFactory.getLog(AppSchedulingInfo.class);
-  private final ApplicationAttemptId applicationAttemptId;//应用的尝试ID
+  private final ApplicationAttemptId applicationAttemptId;//应用的尝试ID,即AM
   final ApplicationId applicationId;//应用ID
   
   private String queueName;//应用所属队列名字
@@ -61,7 +61,7 @@ public class AppSchedulingInfo {
   final String user;//应用的提交者
   
   // TODO making containerIdCounter long
-  private final AtomicLong containerIdCounter;//该应用产生的容器自增长器
+  private final AtomicLong containerIdCounter;//该应用产生的容器自增长器,保证一个AM下的容器都是有序号的
   private final int EPOCH_BIT_SHIFT = 40;
 
   //存储优先级集合

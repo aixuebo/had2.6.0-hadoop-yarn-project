@@ -43,6 +43,7 @@ public class FSSchedulerNode extends SchedulerNode {
 
   /**
    * 在该Node上预留该application的尝试任务,预留容器对象
+   * 如果该node上已经存在了一个预留容器了,是可以被替换该预留容器的,前提是该替换的容器必须也在该node执行,同时与预留的容器相同的app尝试任务,即出自于同一个AM
    */
   @Override
   public synchronized void reserveResource(
