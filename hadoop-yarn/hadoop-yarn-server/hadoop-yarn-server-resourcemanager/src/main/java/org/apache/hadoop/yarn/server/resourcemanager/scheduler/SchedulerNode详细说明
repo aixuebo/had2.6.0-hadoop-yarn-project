@@ -1,0 +1,43 @@
+SchedulerNode 从调度器的视角上看,这个类代表YARN的集群上一个Node节点
+一、全局属性
+  private Resource availableResource = Resource.newInstance(0, 0);//可用资源
+  private Resource usedResource = Resource.newInstance(0, 0);//已经使用的资源
+  private Resource totalResourceCapability;//总的资源
+  
+  private volatile int numContainers;//该节点上正在运行的容器
+
+  /* set of containers that are allocated containers 在该节点上运行的容器映射集合*/
+  private final Map<ContainerId, RMContainer> launchedContainers = new HashMap<ContainerId, RMContainer>();
+
+  private final RMNode rmNode;//该NodeManager在ResourceManager上的映射对象
+  private final String nodeName;//该节点的名字
+
+  private RMContainer reservedContainer;//预留容器
+
+二、方法
+1.public synchronized void releaseContainer(Container container) 释放一个容器
+   a.删除该node节点上运行的容器映射
+   b.增加可用资源,减少已经使用的资源
+   c.减少该node节点分配的容器数量 --numContainers;
+2.public synchronized void allocateContainer(RMContainer rmContainer) 在该node节点上启动了一个容器
+  a.增加已经使用的资源,减少可用资源
+  b.增加该node节点分配的容器数量 +numContainers;
+  c.launchedContainers.put(container.getId(), rmContainer); 添加启动对应关系
+3.public synchronized void recoverContainer(RMContainer rmContainer) 恢复该节点的容器
+  allocateContainer(rmContainer);
+4.与预留容器相关
+  设置和获取预留容器方法,即reservedContainer的set/get方法
+  public abstract void reserveResource(SchedulerApplicationAttempt attempt,Priority priority, RMContainer container);
+  public abstract void unreserveResource(SchedulerApplicationAttempt attempt);
+  设置和取消一个预留资源,为app的某个优先级存储一个容器
+
+---------------------------------
+FSSchedulerNode extends SchedulerNode
+属性
+  private FSAppAttempt reservedAppSchedulable;//保存了该预留的容器属于哪个app尝试任务,即AM
+方法
+public synchronized void reserveResource(SchedulerApplicationAttempt application, Priority priority,RMContainer container) {
+在该Node上预留该application的尝试任务,预留容器对象
+如果该node上已经存在了一个预留容器了,是可以被替换该预留容器的,前提是该替换的容器必须也在该node执行,同时与预留的容器相同的app尝试任务,即出自于同一个AM
+
+---------------------------------
