@@ -67,7 +67,7 @@ public abstract class ContainerLaunchContext {
         Records.newRecord(ContainerLaunchContext.class);
     container.setLocalResources(localResources);//该容器需要加载的资源
     container.setEnvironment(environment);
-    container.setCommands(commands);
+    container.setCommands(commands);//启动AM的容器的命令
     container.setServiceData(serviceData);
     container.setTokens(tokens);
     container.setApplicationACLs(acls);

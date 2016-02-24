@@ -204,7 +204,7 @@ public class FSAppAttempt extends SchedulerApplicationAttempt
     int requiredResources = 
         Math.max(this.getResourceRequests(priority).size() - 1, 0);
     
-    // waitFactor can't be more than '1' 
+    // waitFactor can't be more than '1' 不能比1大
     // i.e. no point skipping more than clustersize opportunities
     return Math.min(((float)requiredResources / clusterNodes), 1.0f);
   }

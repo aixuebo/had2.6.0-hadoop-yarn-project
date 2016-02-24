@@ -117,7 +117,7 @@ public class FairScheduler extends
     AbstractYarnScheduler<FSAppAttempt, FSSchedulerNode> {
   private FairSchedulerConfiguration conf;
 
-  private Resource incrAllocation;
+  private Resource incrAllocation;//每次资源调节单位,stepResource
   private QueueManager queueMgr;
   private volatile Clock clock;
   private boolean usePortForNodeName;
@@ -898,7 +898,7 @@ public class FairScheduler extends
     SchedulerUtils.normalizeRequests(ask, new DominantResourceCalculator(),
         clusterResource, minimumAllocation, maximumAllocation, incrAllocation);
 
-    // Set amResource for this app
+    // Set amResource for this app 为该app设置AM资源
     if (!application.getUnmanagedAM() && ask.size() == 1
         && application.getLiveContainers().isEmpty()) {
       application.setAMResource(ask.get(0).getCapability());

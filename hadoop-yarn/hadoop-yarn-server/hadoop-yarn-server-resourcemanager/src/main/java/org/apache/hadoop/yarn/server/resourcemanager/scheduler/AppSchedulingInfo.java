@@ -173,7 +173,7 @@ public class AppSchedulingInfo {
 
       if (recoverPreemptedRequest && lastRequest != null) {
         // Increment the number of containers to 1, as it is recovering a
-        // single container.
+        // single container.增加一个容器,因为需要在一个单独的容器中进行恢复操作
         request.setNumContainers(lastRequest.getNumContainers() + 1);
       }
 

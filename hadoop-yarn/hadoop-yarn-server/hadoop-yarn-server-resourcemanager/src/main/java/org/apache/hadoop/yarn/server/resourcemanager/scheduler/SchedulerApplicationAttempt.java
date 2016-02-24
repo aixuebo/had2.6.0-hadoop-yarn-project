@@ -90,7 +90,7 @@ public class SchedulerApplicationAttempt {
   private Resource resourceLimit = Resource.newInstance(0, 0);
   protected Resource currentConsumption = Resource.newInstance(0, 0);
   private Resource amResource = Resources.none();
-  private boolean unmanagedAM = true;
+  private boolean unmanagedAM = true;//true表示还尚未设置AM资源
   private boolean amRunning = false;
   private LogAggregationContext logAggregationContext;
 
@@ -445,6 +445,7 @@ public class SchedulerApplicationAttempt {
     List<Container> returnContainerList =
         new ArrayList<Container>(newlyAllocatedContainers.size());
     List<NMToken> nmTokens = new ArrayList<NMToken>();
+    
     for (Iterator<RMContainer> i = newlyAllocatedContainers.iterator(); i
       .hasNext();) {
       RMContainer rmContainer = i.next();
