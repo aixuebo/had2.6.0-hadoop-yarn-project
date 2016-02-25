@@ -27,8 +27,8 @@ public enum RMAppAttemptEventType {
   KILL,
 
   // Source: AMLauncher
-  LAUNCHED,
-  LAUNCH_FAILED,
+  LAUNCHED,//表示AM启动成功了
+  LAUNCH_FAILED,//表示AM启动失败了
 
   // Source: AMLivelinessMonitor  AppAttempt长期没有向resourceManager发送心跳,则resourceManager认为其过期
   EXPIRE,//通知ResourceManager这个应用已经过期了,即app的尝试任务ApplicationMaster长时间没有心跳反应了

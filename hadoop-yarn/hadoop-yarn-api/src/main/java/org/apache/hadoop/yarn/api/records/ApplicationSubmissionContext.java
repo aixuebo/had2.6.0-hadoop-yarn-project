@@ -95,11 +95,11 @@ public abstract class ApplicationSubmissionContext {
       String amContainerLabelExpression) {
     ApplicationSubmissionContext context =
         Records.newRecord(ApplicationSubmissionContext.class);
-    context.setApplicationId(applicationId);
-    context.setApplicationName(applicationName);
+    context.setApplicationId(applicationId);//appId
+    context.setApplicationName(applicationName);//名称
     context.setQueue(queue);
     context.setPriority(priority);
-    context.setAMContainerSpec(amContainer);
+    context.setAMContainerSpec(amContainer);//容器在app任务上任意一个任务需要的环境
     context.setUnmanagedAM(isUnmanagedAM);
     context.setCancelTokensWhenComplete(cancelTokensWhenComplete);
     context.setMaxAppAttempts(maxAppAttempts);
@@ -108,13 +108,14 @@ public abstract class ApplicationSubmissionContext {
     context.setNodeLabelExpression(appLabelExpression);
     context.setResource(resource);
     
+    //为AM本身添加有一个容器,去执行AM
     ResourceRequest amReq = Records.newRecord(ResourceRequest.class);
-    amReq.setResourceName(ResourceRequest.ANY);
-    amReq.setCapability(resource);
-    amReq.setNumContainers(1);
+    amReq.setResourceName(ResourceRequest.ANY);//表示任何节点都可以执行该AM
+    amReq.setCapability(resource);//AM的资源与容器的资源相同即可
+    amReq.setNumContainers(1);//1个容器即可
     amReq.setRelaxLocality(true);
     amReq.setNodeLabelExpression(amContainerLabelExpression);
-    context.setAMContainerResourceRequest(amReq);
+    context.setAMContainerResourceRequest(amReq);//am本身需要的资源
     return context;
   }
   

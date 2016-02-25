@@ -47,6 +47,9 @@ import org.apache.hadoop.yarn.util.Records;
 @Unstable
 public abstract class ApplicationAttemptReport {
 
+	/**
+	 * 一个job作业的一个尝试任务的详细信息,即AM的详细信息
+	 */
   @Private
   @Unstable
   public static ApplicationAttemptReport newInstance(

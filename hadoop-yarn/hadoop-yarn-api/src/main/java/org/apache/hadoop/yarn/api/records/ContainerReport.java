@@ -43,7 +43,7 @@ import org.apache.hadoop.yarn.util.Records;
  * <li>Log URL.</li>
  * </ul>
  * </p>
- * 
+ * 代表某个容器的详细信息
  */
 
 @Public

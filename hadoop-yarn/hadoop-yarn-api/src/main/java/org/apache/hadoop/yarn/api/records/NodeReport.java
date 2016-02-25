@@ -43,6 +43,7 @@ import org.apache.hadoop.yarn.util.Records;
  * </p>
  *
  * @see ApplicationClientProtocol#getClusterNodes(org.apache.hadoop.yarn.api.protocolrecords.GetClusterNodesRequest)
+ * 表示一个Node节点的报告信息
  */
 @Public
 @Stable
@@ -68,9 +69,9 @@ public abstract class NodeReport {
     nodeReport.setNodeState(nodeState);
     nodeReport.setHttpAddress(httpAddress);
     nodeReport.setRackName(rackName);
-    nodeReport.setUsed(used);
-    nodeReport.setCapability(capability);
-    nodeReport.setNumContainers(numContainers);
+    nodeReport.setUsed(used);//已经使用资源
+    nodeReport.setCapability(capability);//总资源
+    nodeReport.setNumContainers(numContainers);//已经有多少个容器在上面执行
     nodeReport.setHealthReport(healthReport);
     nodeReport.setLastHealthReportTime(lastHealthReportTime);
     nodeReport.setNodeLabels(nodeLabels);

@@ -128,6 +128,7 @@ public interface ContainerManagementProtocol {
    *         requests.
    * @throws YarnException
    * @throws IOException
+   * 可以停止一组容器集合
    */
   @Public
   @Stable

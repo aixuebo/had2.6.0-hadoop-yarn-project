@@ -65,7 +65,7 @@ public abstract class ContainerLaunchContext {
       Map<ApplicationAccessType, String> acls) {
     ContainerLaunchContext container =
         Records.newRecord(ContainerLaunchContext.class);
-    container.setLocalResources(localResources);//该容器需要加载的资源
+    container.setLocalResources(localResources);//该容器需要加载的资源,包括job.xml,split文件,住jar包等信息
     container.setEnvironment(environment);
     container.setCommands(commands);//启动AM的容器的命令
     container.setServiceData(serviceData);

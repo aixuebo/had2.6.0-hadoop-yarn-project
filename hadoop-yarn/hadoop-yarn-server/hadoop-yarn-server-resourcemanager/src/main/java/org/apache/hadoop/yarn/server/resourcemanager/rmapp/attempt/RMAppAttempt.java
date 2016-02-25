@@ -145,6 +145,7 @@ public interface RMAppAttempt extends EventHandler<RMAppAttemptEvent> {
   /**
    * The container on which the Application Master is running.
    * @return the {@link Container} on which the application master is running.
+   * AM所对应的容器
    */
   Container getMasterContainer();
 

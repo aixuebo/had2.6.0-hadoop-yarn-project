@@ -29,12 +29,14 @@ import org.apache.hadoop.yarn.event.EventHandler;
 import org.apache.hadoop.yarn.server.resourcemanager.RMContext;
 import org.apache.hadoop.yarn.server.resourcemanager.rmapp.attempt.RMAppAttempt;
 
-
+/**
+ * 专门处理AM的启动与清理的服务
+ */
 public class ApplicationMasterLauncher extends AbstractService implements EventHandler<AMLauncherEvent> {
     
   private static final Log LOG = LogFactory.getLog(
       ApplicationMasterLauncher.class);
-  private final ThreadPoolExecutor launcherPool;
+  private final ThreadPoolExecutor launcherPool;//线程池
   /**
    * 每次执行一个Runnable
    */

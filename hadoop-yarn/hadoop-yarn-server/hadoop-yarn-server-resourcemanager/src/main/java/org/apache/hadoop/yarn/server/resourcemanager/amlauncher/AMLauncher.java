@@ -66,18 +66,20 @@ import com.google.common.annotations.VisibleForTesting;
 
 /**
  * The launch of the AM itself.
+ * 表示一个AM的启动任务,可以是启动一个AM,或者clean清理一个AM
+ * 一个AM对应一个该对象
  */
 public class AMLauncher implements Runnable {
 
   private static final Log LOG = LogFactory.getLog(AMLauncher.class);
 
-  private ContainerManagementProtocol containerMgrProxy;
+  private ContainerManagementProtocol containerMgrProxy;//对应NodeManager对象,即该AM的启动容器在哪个节点上运行,就是该节点对象
 
   private final RMAppAttempt application;
   private final Configuration conf;
   private final AMLauncherEventType eventType;
   private final RMContext rmContext;
-  private final Container masterContainer;
+  private final Container masterContainer;//AM所对应的容器
   
   @SuppressWarnings("rawtypes")
   private final EventHandler handler;
@@ -92,6 +94,7 @@ public class AMLauncher implements Runnable {
     this.masterContainer = application.getMasterContainer();
   }
   
+  //与该node节点连接起来
   private void connect() throws IOException {
     ContainerId masterContainerID = masterContainer.getId();
     
@@ -100,19 +103,20 @@ public class AMLauncher implements Runnable {
   
   private void launch() throws IOException, YarnException {
     connect();
-    ContainerId masterContainerID = masterContainer.getId();
-    ApplicationSubmissionContext applicationContext =
-      application.getSubmissionContext();
+    ContainerId masterContainerID = masterContainer.getId();//AM的容器ID
+    ApplicationSubmissionContext applicationContext = application.getSubmissionContext();
     LOG.info("Setting up container " + masterContainer
         + " for AM " + application.getAppAttemptId());  
     ContainerLaunchContext launchContext = createAMContainerLaunchContext(applicationContext, masterContainerID);
 
+    //启动一个容器
     StartContainerRequest scRequest = StartContainerRequest.newInstance(launchContext,masterContainer.getContainerToken());
     
     List<StartContainerRequest> list = new ArrayList<StartContainerRequest>();
     list.add(scRequest);
     StartContainersRequest allRequests = StartContainersRequest.newInstance(list);
 
+    //如果启动失败,则抛异常
     StartContainersResponse response = containerMgrProxy.startContainers(allRequests);
     if (response.getFailedRequests() != null && response.getFailedRequests().containsKey(masterContainerID)) {
       Throwable t = response.getFailedRequests().get(masterContainerID).deSerialize();
@@ -122,13 +126,16 @@ public class AMLauncher implements Runnable {
     }
   }
   
+  //主要就是结束该容器即可
   private void cleanup() throws IOException, YarnException {
     connect();
-    ContainerId containerId = masterContainer.getId();
+    ContainerId containerId = masterContainer.getId();//AM的容器ID
     List<ContainerId> containerIds = new ArrayList<ContainerId>();
     containerIds.add(containerId);
     StopContainersRequest stopRequest = StopContainersRequest.newInstance(containerIds);
-    StopContainersResponse response = containerMgrProxy.stopContainers(stopRequest);
+    StopContainersResponse response = containerMgrProxy.stopContainers(stopRequest);//停止该AM所在容器
+    
+    //表示失败的容器,key是每一个失败的容器,value是该容器失败的原因,说明该容器启动失败了,则抛异常
     if (response.getFailedRequests() != null && response.getFailedRequests().containsKey(containerId)) {
       Throwable t = response.getFailedRequests().get(containerId).deSerialize();
       parseAndThrowException(t);
@@ -138,6 +145,7 @@ public class AMLauncher implements Runnable {
   // Protected. For tests.
   protected ContainerManagementProtocol getContainerMgrProxy(final ContainerId containerId) {
 
+	  //与该容器对应的Node节点连接起来
     final NodeId node = masterContainer.getNodeId();
     final InetSocketAddress containerManagerBindAddress =
         NetUtils.createSocketAddrForHost(node.getHost(), node.getPort());
@@ -170,6 +178,7 @@ public class AMLauncher implements Runnable {
         });
   }
 
+  //为启动容器,构建一个容器对象,并且初始化他
   private ContainerLaunchContext createAMContainerLaunchContext(
       ApplicationSubmissionContext applicationMasterContext,
       ContainerId containerID) throws IOException {
@@ -182,12 +191,13 @@ public class AMLauncher implements Runnable {
         + StringUtils.arrayToString(container.getCommands().toArray(
             new String[0])));
     
-    // Finalize the container
+    // Finalize the container 初始化一些信息,并且设置token
     setupTokens(container, containerID);
     
     return container;
   }
 
+  //初始化一些信息,并且设置token
   private void setupTokens(ContainerLaunchContext container, ContainerId containerID) throws IOException {
       
     Map<String, String> environment = container.getEnvironment();

@@ -49,8 +49,8 @@ public abstract class LocalResource {
       LocalResourceVisibility visibility, long size, long timestamp,
       String pattern) {
     LocalResource resource = Records.newRecord(LocalResource.class);
-    resource.setResource(url);
-    resource.setType(type);
+    resource.setResource(url);//资源所在的hdfs全路径
+    resource.setType(type);//文件类型
     resource.setVisibility(visibility);
     resource.setSize(size);
     resource.setTimestamp(timestamp);

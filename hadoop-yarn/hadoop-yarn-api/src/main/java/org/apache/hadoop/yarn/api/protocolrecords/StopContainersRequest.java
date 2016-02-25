@@ -31,6 +31,7 @@ import org.apache.hadoop.yarn.util.Records;
  * <code>NodeManager</code> to <em>stop</em> containers.</p>
  * 
  * @see ContainerManagementProtocol#stopContainers(StopContainersRequest)
+ * 可以停止一组容器
  */
 @Public
 @Stable

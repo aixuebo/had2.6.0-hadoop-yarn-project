@@ -384,6 +384,7 @@ public class ClientRMService extends AbstractService implements
     return response;
   }
   
+  //获取该job的所有的尝试任务详细信息
   @Override
   public GetApplicationAttemptsResponse getApplicationAttempts(
       GetApplicationAttemptsRequest request) throws YarnException, IOException {
@@ -429,6 +430,7 @@ public class ClientRMService extends AbstractService implements
    * 
    * we're going to fix the issue of showing non-running containers of the
    * running application in YARN-1794
+   * 代表某个容器的详细信息
    */
   @Override
   public GetContainerReportResponse getContainerReport(
@@ -479,6 +481,7 @@ public class ClientRMService extends AbstractService implements
    * 
    * we're going to fix the issue of showing non-running containers of the
    * running application in YARN-1794"
+   * 代表一个AM下所有的容器的详细信息
    */
   @Override
   public GetContainersResponse getContainers(GetContainersRequest request)
@@ -526,6 +529,7 @@ public class ClientRMService extends AbstractService implements
     return response;
   }
 
+  //客户端提交了一个job
   @Override
   public SubmitApplicationResponse submitApplication(
       SubmitApplicationRequest request) throws YarnException {

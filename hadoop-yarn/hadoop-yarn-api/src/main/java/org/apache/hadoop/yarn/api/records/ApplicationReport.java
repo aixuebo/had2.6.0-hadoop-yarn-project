@@ -47,6 +47,7 @@ import java.util.Set;
  * </p>
  *
  * @see ApplicationClientProtocol#getApplicationReport(org.apache.hadoop.yarn.api.protocolrecords.GetApplicationReportRequest)
+ * 代表一个app作业的详细信息
  */
 @Public
 @Stable
@@ -62,22 +63,24 @@ public abstract class ApplicationReport {
       ApplicationResourceUsageReport appResources, String origTrackingUrl,
       float progress, String applicationType, Token amRmToken) {
     ApplicationReport report = Records.newRecord(ApplicationReport.class);
-    report.setApplicationId(applicationId);
-    report.setCurrentApplicationAttemptId(applicationAttemptId);
+    report.setApplicationId(applicationId);//appId
+    report.setCurrentApplicationAttemptId(applicationAttemptId);//当前针对该app的尝试任务AM的id
     report.setUser(user);
     report.setQueue(queue);
     report.setName(name);
+    
     report.setHost(host);
     report.setRpcPort(rpcPort);
+    report.setTrackingUrl(url);
+    report.setApplicationResourceUsageReport(appResources);
+    report.setOriginalTrackingUrl(origTrackingUrl);
+    
     report.setClientToAMToken(clientToAMToken);
     report.setYarnApplicationState(state);
     report.setDiagnostics(diagnostics);
-    report.setTrackingUrl(url);
     report.setStartTime(startTime);
     report.setFinishTime(finishTime);
     report.setFinalApplicationStatus(finalStatus);
-    report.setApplicationResourceUsageReport(appResources);
-    report.setOriginalTrackingUrl(origTrackingUrl);
     report.setProgress(progress);
     report.setApplicationType(applicationType);
     report.setAMRMToken(amRmToken);

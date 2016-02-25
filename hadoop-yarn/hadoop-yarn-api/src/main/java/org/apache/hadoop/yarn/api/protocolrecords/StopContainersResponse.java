@@ -49,7 +49,7 @@ public abstract class StopContainersResponse {
       Map<ContainerId, SerializedException> failedRequests) {
     StopContainersResponse response =
         Records.newRecord(StopContainersResponse.class);
-    response.setFailedRequests(failedRequests);
+    response.setFailedRequests(failedRequests);//表示失败的容器,key是每一个失败的容器,value是该容器失败的原因
     response.setSuccessfullyStoppedContainers(succeededRequests);
     return response;
   }
