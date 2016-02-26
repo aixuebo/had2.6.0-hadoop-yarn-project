@@ -301,14 +301,14 @@ public class NodeManager extends CompositeService
       public void run() {
         try {
           LOG.info("Notifying ContainerManager to block new container-requests");
-          containerManager.setBlockNewContainerRequests(true);
+          containerManager.setBlockNewContainerRequests(true);//设置true,表示暂时该节点不能接受容器请求
           if (!rmWorkPreservingRestartEnabled) {
             LOG.info("Cleaning up running containers on resync");
             containerManager.cleanupContainersOnNMResync();
           } else {
             LOG.info("Preserving containers on resync");
           }
-          ((NodeStatusUpdaterImpl) nodeStatusUpdater).rebootNodeStatusUpdaterAndRegisterWithRM();
+          ((NodeStatusUpdaterImpl) nodeStatusUpdater).rebootNodeStatusUpdaterAndRegisterWithRM();//重新注册该node,向yarn发送注册请求
         } catch (YarnRuntimeException e) {
           LOG.fatal("Error while rebooting NodeStatusUpdater.", e);
           shutDown();
@@ -474,10 +474,10 @@ public class NodeManager extends CompositeService
   @Override
   public void handle(NodeManagerEvent event) {
     switch (event.getType()) {
-    case SHUTDOWN:
+    case SHUTDOWN://说明Yarn让他关闭该Node节点
       shutDown();
       break;
-    case RESYNC:
+    case RESYNC://说明Yarn让他重新注册该Node节点
       resyncWithRM();
       break;
     default:

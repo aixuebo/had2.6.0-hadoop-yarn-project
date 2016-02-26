@@ -138,6 +138,16 @@ import org.apache.hadoop.yarn.server.utils.BuilderUtils;
 import com.google.common.annotations.VisibleForTesting;
 import com.google.protobuf.ByteString;
 
+/**
+ * 专门提供在该node上执行的容器相关的操作
+ * 比如:
+ * 1.开启一组容器,让其在该node上执行
+ * 2.关闭一组容器
+ * 3.查看一组容器的详细运行内容
+ * 4.处理容器在app完成时,或者容器完成时，如何处理这些容器
+ * 
+ * 注意:容器是否完成,都是由执行节点,即node节点自己知道,因此外界传递来的app完成或者容器完成,则都是被kill掉的
+ */
 public class ContainerManagerImpl extends CompositeService implements
     ServiceStateChangeListener, ContainerManagementProtocol,
     EventHandler<ContainerManagerEvent> {
@@ -667,23 +677,28 @@ public class ContainerManagerImpl extends CompositeService implements
 
   /**
    * Start a list of containers on this NodeManager.
+   * 启动一组容器
    */
   @Override
   public StartContainersResponse
       startContainers(StartContainersRequest requests) throws YarnException,
           IOException {
     if (blockNewContainerRequests.get()) {
-      throw new NMNotYetReadyException(
+      throw new NMNotYetReadyException(//拒绝,因为目前还尚未与yarn连接好
         "Rejecting new containers as NodeManager has not"
             + " yet connected with ResourceManager");
     }
     UserGroupInformation remoteUgi = getRemoteUgi();
     NMTokenIdentifier nmTokenIdentifier = selectNMTokenIdentifier(remoteUgi);
     authorizeUser(remoteUgi,nmTokenIdentifier);
+    
+    //启动成功的容器集合
     List<ContainerId> succeededContainers = new ArrayList<ContainerId>();
-    Map<ContainerId, SerializedException> failedContainers =
-        new HashMap<ContainerId, SerializedException>();
-    for (StartContainerRequest request : requests.getStartContainerRequests()) {
+    
+    //启动失败的容器集合
+    Map<ContainerId, SerializedException> failedContainers = new HashMap<ContainerId, SerializedException>();
+    
+    for (StartContainerRequest request : requests.getStartContainerRequests()) {//循环要启动的容器请求
       ContainerId containerId = null;
       try {
         ContainerTokenIdentifier containerTokenIdentifier =
@@ -806,7 +821,7 @@ public class ContainerManagerImpl extends CompositeService implements
           credentials, metrics, containerTokenIdentifier);
     ApplicationId applicationID =
         containerId.getApplicationAttemptId().getApplicationId();
-    if (context.getContainers().putIfAbsent(containerId, container) != null) {
+    if (context.getContainers().putIfAbsent(containerId, container) != null) {//说明容器已经存在了
       NMAuditLogger.logFailure(user, AuditConstants.START_CONTAINER,
         "ContainerManagerImpl", "Container already running on this node!",
         applicationID, containerId);
@@ -821,7 +836,7 @@ public class ContainerManagerImpl extends CompositeService implements
         Application application =
             new ApplicationImpl(dispatcher, user, applicationID, credentials, context);
         if (null == context.getApplications().putIfAbsent(applicationID,
-          application)) {
+          application)) {//不存在该容器
           LOG.info("Creating a new application reference for app " + applicationID);
           LogAggregationContext logAggregationContext =
               containerTokenIdentifier.getLogAggregationContext();
@@ -1070,7 +1085,7 @@ public class ContainerManagerImpl extends CompositeService implements
   @Override
   public void handle(ContainerManagerEvent event) {
     switch (event.getType()) {
-    case FINISH_APPS:
+    case FINISH_APPS://一组app完成了
       CMgrCompletedAppsEvent appsFinishedEvent =
           (CMgrCompletedAppsEvent) event;
       for (ApplicationId appID : appsFinishedEvent.getAppsToCleanup()) {
@@ -1090,7 +1105,7 @@ public class ContainerManagerImpl extends CompositeService implements
                 diagnostic));
       }
       break;
-    case FINISH_CONTAINERS:
+    case FINISH_CONTAINERS://一组容器完成了
       CMgrCompletedContainersEvent containersFinishedEvent =
           (CMgrCompletedContainersEvent) event;
       for (ContainerId container : containersFinishedEvent

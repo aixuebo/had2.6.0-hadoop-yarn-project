@@ -40,8 +40,8 @@ public abstract class RegisterNodeManagerRequest {
     request.setResource(resource);//节点总资源
     request.setNodeId(nodeId);//节点id
     request.setNMVersion(nodeManagerVersionId);//yarn版本号
-    request.setContainerStatuses(containerStatuses);
-    request.setRunningApplications(runningApplications);//节点接受
+    request.setContainerStatuses(containerStatuses);//节点当前运行的容器状态集合
+    request.setRunningApplications(runningApplications);//节点当前运行的app集合
     return request;
   }
   

@@ -70,12 +70,27 @@ import org.apache.hadoop.yarn.server.nodemanager.containermanager.ContainerManag
 import org.apache.hadoop.yarn.server.nodemanager.containermanager.application.ApplicationState;
 import org.apache.hadoop.yarn.server.nodemanager.containermanager.container.Container;
 import org.apache.hadoop.yarn.server.nodemanager.metrics.NodeManagerMetrics;
+import org.apache.hadoop.yarn.util.Records;
 import org.apache.hadoop.yarn.util.YarnVersionInfo;
 
 import com.google.common.annotations.VisibleForTesting;
 
 /**
  * 统计和更新节点信息
+ * 与yarn做交互,注册该节点,以及定期发送心跳信息
+ * 1.List<ApplicationId> appsToCleanup = response.getApplicationsToCleanup();
+ *  可以对yarn上说要清理的app,做一个保留,保留一定时间
+ * 2. Map<ContainerId, Long> recentlyStoppedContainers;
+ * 对最近停止的容器保留一定时间
+ * 3.发送心跳
+ * 请求:
+ *  NodeStatus nodeStatus = Records.newRecord(NodeStatus.class);
+    nodeStatus.setResponseId(responseId);//responseId,该id是resourceManager上一次返回给节点的ID
+    nodeStatus.setNodeId(nodeId);//节点Id
+    nodeStatus.setContainersStatuses(containerStatuses);//当前节点上容器集合
+    nodeStatus.setKeepAliveApplications(keepAliveApplications);//当前该节点依然还活跃的应用集合,appTokenKeepAliveMap中yarn本应该清理的app,但是现在依然活着
+    nodeStatus.setNodeHealthStatus(nodeHealthStatus);//节点当前健康情况
+    
  */
 public class NodeStatusUpdaterImpl extends AbstractService implements
     NodeStatusUpdater {
@@ -96,7 +111,7 @@ public class NodeStatusUpdaterImpl extends AbstractService implements
   private Resource totalResource;//该节点的总资源信息
   private int httpPort;//该节点端口
   private String nodeManagerVersionId;//yarn版本号
-  private String minimumResourceManagerVersion;//resourceManager最小的版本
+  private String minimumResourceManagerVersion;//允许resourceManager最小的版本
   private volatile boolean isStopped;
   private boolean tokenKeepAliveEnabled;
   private long tokenRemovalDelayMs;//多次时间还没有反应,则该节点说明已经死了
@@ -108,7 +123,7 @@ public class NodeStatusUpdaterImpl extends AbstractService implements
   // the AM finishes it informs the RM to stop the may-be-already-completed
   // containers.最近停止的容器缓存起来,key是容器ID,value是该容器删除的时间,允许这段时间内虽然容器停止了,但是该容器的信息还可以查询到
   private final Map<ContainerId, Long> recentlyStoppedContainers;
-  // Duration for which to track recently stopped container.
+  // Duration for which to track recently stopped container.容器完成后,还需要保存多久
   private long durationToTrackStoppedContainers;
 
   private final NodeHealthCheckerService healthChecker;
@@ -333,13 +348,13 @@ public class NodeStatusUpdaterImpl extends AbstractService implements
       Entry<ApplicationId, Long> e = i.next();
       ApplicationId appId = e.getKey();
       Long nextKeepAlive = e.getValue();
-      if (!this.context.getApplications().containsKey(appId)) {
+      if (!this.context.getApplications().containsKey(appId)) {//该app已经不存在了,则从队列中删除
         // Remove if the application has finished.
         i.remove();
-      } else if (System.currentTimeMillis() > nextKeepAlive) {
+      } else if (System.currentTimeMillis() > nextKeepAlive) {//超过时间还存活,则重新添加到集合中
         // KeepAlive list for the next hearbeat.
         appList.add(appId);
-        trackAppForKeepAlive(appId);
+        trackAppForKeepAlive(appId);//重新计时
       }
     }
     return appList;
@@ -518,7 +533,7 @@ public class NodeStatusUpdaterImpl extends AbstractService implements
     // likely expire.
     long nextTime = System.currentTimeMillis()
     + (long) (0.7 * tokenRemovalDelayMs + (0.2 * tokenRemovalDelayMs
-        * keepAliveDelayRandom.nextInt(100))/100);
+        * keepAliveDelayRandom.nextInt(100))/100);//表示0.7+0.2*(1-100之间随机数)/100,即0.7+0.2*百分比随机数 = 0.7-0.9之间
     appTokenKeepAliveMap.put(appId, nextTime);
   }
 

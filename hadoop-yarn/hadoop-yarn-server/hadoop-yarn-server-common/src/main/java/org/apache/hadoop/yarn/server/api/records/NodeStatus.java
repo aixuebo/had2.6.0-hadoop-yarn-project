@@ -34,10 +34,10 @@ public abstract class NodeStatus {
       List<ApplicationId> keepAliveApplications,
       NodeHealthStatus nodeHealthStatus) {
     NodeStatus nodeStatus = Records.newRecord(NodeStatus.class);
-    nodeStatus.setResponseId(responseId);//responseId,该id是resourceManager返回给节点的
+    nodeStatus.setResponseId(responseId);//responseId,该id是resourceManager上一次返回给节点的ID
     nodeStatus.setNodeId(nodeId);//节点Id
     nodeStatus.setContainersStatuses(containerStatuses);//当前节点上容器集合
-    nodeStatus.setKeepAliveApplications(keepAliveApplications);//当前该节点活跃的应用集合
+    nodeStatus.setKeepAliveApplications(keepAliveApplications);//当前该节点依然还活跃的应用集合,appTokenKeepAliveMap中yarn本应该清理的app,但是现在依然活着
     nodeStatus.setNodeHealthStatus(nodeHealthStatus);//节点当前健康情况
     return nodeStatus;
   }

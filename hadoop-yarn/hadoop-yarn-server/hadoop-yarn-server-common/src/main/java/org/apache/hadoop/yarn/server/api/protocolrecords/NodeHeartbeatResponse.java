@@ -39,11 +39,21 @@ public interface NodeHeartbeatResponse {
 
   //去清理的容器
   List<ContainerId> getContainersToCleanup();
+  void addAllContainersToCleanup(List<ContainerId> containers);
+  
   //去移除的容器
   List<ContainerId> getContainersToBeRemovedFromNM();
+  // This tells NM to remove finished containers from its context. Currently, NM
+  // will remove finished containers from its context only after AM has actually
+  // received the finished containers in a previous allocate response
+  void addContainersToBeRemovedFromNM(List<ContainerId> containers);
+  
   //去清理的应用
   List<ApplicationId> getApplicationsToCleanup();
-
+  //去清理的应用
+  void addAllApplicationsToCleanup(List<ApplicationId> applications);
+  
+  
   //动作
   NodeAction getNodeAction();
   void setNodeAction(NodeAction action);
@@ -54,17 +64,6 @@ public interface NodeHeartbeatResponse {
   //密钥  
   MasterKey getNMTokenMasterKey();
   void setNMTokenMasterKey(MasterKey secretKey);
-
-  //去清理的容器
-  void addAllContainersToCleanup(List<ContainerId> containers);
-
-  // This tells NM to remove finished containers from its context. Currently, NM
-  // will remove finished containers from its context only after AM has actually
-  // received the finished containers in a previous allocate response
-  void addContainersToBeRemovedFromNM(List<ContainerId> containers);
-  
-  //去清理的应用
-  void addAllApplicationsToCleanup(List<ApplicationId> applications);
 
   //下一次请求时间
   long getNextHeartBeatInterval();
