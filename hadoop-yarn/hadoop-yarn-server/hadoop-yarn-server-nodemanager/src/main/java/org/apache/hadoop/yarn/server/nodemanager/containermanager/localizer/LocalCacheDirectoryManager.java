@@ -60,10 +60,12 @@ public class LocalCacheDirectoryManager {
   public LocalCacheDirectoryManager(Configuration conf) {
     totalSubDirectories = 0;
     Directory rootDir = new Directory(totalSubDirectories);
+    
     nonFullDirectories = new LinkedList<Directory>();
     knownDirectories = new HashMap<String, Directory>();
     knownDirectories.put("", rootDir);
     nonFullDirectories.add(rootDir);
+    
     this.perDirectoryFileLimit =
         conf.getInt(YarnConfiguration.NM_LOCAL_CACHE_MAX_FILES_PER_DIRECTORY,
           YarnConfiguration.DEFAULT_NM_LOCAL_CACHE_MAX_FILES_PER_DIRECTORY) - 36;
@@ -175,7 +177,7 @@ public class LocalCacheDirectoryManager {
     static String getRelativePath(int directoryNo) {
       String relativePath = "";
       if (directoryNo > 0) {
-        String tPath = Integer.toString(directoryNo - 1, DIRECTORIES_PER_LEVEL);//directoryNo=34,返回值是2,如果是41,则返回13
+        String tPath = Integer.toString(directoryNo - 1, DIRECTORIES_PER_LEVEL);//directoryNo=34,返回值是x,如果是41,则返回14,即41-1 = 40,是36的一倍,并且余数4
         StringBuffer sb = new StringBuffer();
         if (tPath.length() == 1) {
           sb.append(tPath.charAt(0));

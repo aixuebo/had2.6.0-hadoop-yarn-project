@@ -37,12 +37,13 @@ import org.apache.hadoop.yarn.server.nodemanager.containermanager.localizer.even
  */
 interface LocalResourcesTracker extends EventHandler<ResourceEvent>, Iterable<LocalizedResource> {
 
-	//该容器删除一个资源LocalizedResource
+  //该容器删除一个资源LocalizedResource
   boolean remove(LocalizedResource req, DeletionService delService);
 
   Path getPathForLocalization(LocalResourceRequest req, Path localDirPath);
 
   String getUser();
 
+  //一个HDFS的资源请求,即参数,对应的返回值就是该资源下载到本地后的对象
   LocalizedResource getLocalizedResource(LocalResourceRequest request);
 }

@@ -50,7 +50,9 @@ import com.google.common.annotations.VisibleForTesting;
 /**
  * A collection of {@link LocalizedResource}s all of same
  * {@link LocalResourceVisibility}.
- * 一个应用拥有一个该类,表示该应用有关系的资源跟踪
+ * 1.一个应用拥有一个该类,表示该应用有关系的资源跟踪,此时appId和user都不是null
+ * 2.或者一个user拥有一个该类,此时appId是null
+ * 3.或者所有public资源共用同一个该类,此时appId和user都是null
  */
 class LocalResourcesTrackerImpl implements LocalResourcesTracker {
 

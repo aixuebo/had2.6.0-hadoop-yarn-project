@@ -646,6 +646,7 @@ public class ContainerImpl implements Container {
       }
 
       // Send requests for public, private resources
+      //发送请求,加载该容器所需要的容器集合
       Map<String,LocalResource> cntrRsrc = ctxt.getLocalResources();
       if (!cntrRsrc.isEmpty()) {
         try {

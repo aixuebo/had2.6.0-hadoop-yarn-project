@@ -33,6 +33,7 @@ public interface NodeStatusUpdater extends Service {
   /**
    * Get the ResourceManager identifier received during registration
    * @return the ResourceManager ID
+   * ResourceManager的唯一标示
    */
   long getRMIdentifier();
   
@@ -40,17 +41,20 @@ public interface NodeStatusUpdater extends Service {
    * Query if a container has recently completed
    * @param containerId the container ID
    * @return true if the container has recently completed
+   * true标示一个容器最近已经完成了
    */
   public boolean isContainerRecentlyStopped(ContainerId containerId);
   
   /**
    * Add a container to the list of containers that have recently completed
    * @param containerId the ID of the completed container
+   * 添加一个容器,说明该容器已经完成了
    */
   public void addCompletedContainer(ContainerId containerId);
 
   /**
    * Clear the list of recently completed containers
+   * 清理最近完成的容器列表
    */
   public void clearFinishedContainersFromCache();
 }
