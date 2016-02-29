@@ -81,11 +81,13 @@ public class LinuxResourceCalculatorPlugin extends ResourceCalculatorPlugin {
 
   private long ramSize = 0;//内存大小,单位是k
   private long swapSize = 0;//交换空间大小,单位是k
-  private long ramSizeFree = 0;  // free ram space on the machine (kB)
-  private long swapSizeFree = 0; // free swap space on the machine (kB)
-  private long inactiveSize = 0; // inactive cache memory (kB)
+  private long ramSizeFree = 0;  // free ram space on the machine (kB) 剩余
+  private long swapSizeFree = 0; // free swap space on the machine (kB) 剩余
+  private long inactiveSize = 0; // inactive cache memory (kB) 不活跃的缓存内存
+  
   private int numProcessors = 0; // number of processors on the system 操作系统有多少个cpu,即如果16核,则该值为16
   private long cpuFrequency = 0L; // CPU frequency on the system (kHz)
+  
   private long cumulativeCpuTime = 0L; // CPU used time since system is on (ms)
   private long lastCumulativeCpuTime = 0L; // CPU used time read last time (ms)
   // Unix timestamp while reading the CPU time (ms)

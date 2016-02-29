@@ -199,6 +199,14 @@ public class ProcfsBasedProcessTree extends ResourceCalculatorProcessTree {
    * Update process-tree with latest state. If the root-process is not alive,
    * tree will be empty.
    * 更新跟本进程相关的子子孙孙进程信息
+   * 
+   * 1.获取所有进程号码集合
+   * 2.保存该进程以及子进程所有的老信息
+   * 3.重新加载新的 进程以及子进程所有信息
+   * a.循环所有进程,存储成进程Id--ProcessInfo进程详细信息的映射关系
+   * b.找到该进程的进程Id--ProcessInfo映射关系,存储到processTree中
+   * c.循环a的结果集,为所有父进程添加子进程信息
+   * d.不断追加该进程的子进程,将获取与该进程所有相关的子孙进程集合,存储到processTree中
    */
   @Override
   public void updateProcessTree() {
