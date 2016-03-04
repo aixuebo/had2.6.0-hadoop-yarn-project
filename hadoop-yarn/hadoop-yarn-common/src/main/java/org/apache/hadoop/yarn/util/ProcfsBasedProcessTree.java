@@ -593,8 +593,8 @@ public class ProcfsBasedProcessTree extends ResourceCalculatorProcessTree {
     private Integer pgrpId; // process group-id 组ID,即是否在同一个组下
     private String ppid; // parent process-id 父进程ID
     private Integer sessionId; // session-id
-    private Long vmem; // virtual memory usage
-    private Long rssmemPage; // rss memory usage in # of pages
+    private Long vmem; // virtual memory usage 虚拟内存
+    private Long rssmemPage; // rss memory usage in # of pages 物理内存
     private Long utime = 0L; // # of jiffies in user mode
     private final BigInteger MAX_LONG = BigInteger.valueOf(Long.MAX_VALUE);
     private BigInteger stime = new BigInteger("0"); // # of jiffies in kernel mode

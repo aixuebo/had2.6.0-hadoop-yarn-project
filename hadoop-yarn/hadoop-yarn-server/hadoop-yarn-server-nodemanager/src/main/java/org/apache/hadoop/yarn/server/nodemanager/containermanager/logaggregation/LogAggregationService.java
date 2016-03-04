@@ -84,22 +84,25 @@ public class LogAggregationService extends AbstractService implements
    * created.
    */
   private static final FsPermission TLDIR_PERMISSIONS = FsPermission
-      .createImmutable((short) 01777);
+      .createImmutable((short) 01777);//远程根节点remoteRootLogDir的权限
   /**
    * Permissions for the Application directory.
    */
   private static final FsPermission APP_DIR_PERMISSIONS = FsPermission
-      .createImmutable((short) 0770);
+      .createImmutable((short) 0770);//每一个应用app对应的目录权限
 
   private final Context context;//节点的上下文对象
   private final DeletionService deletionService;//删除服务
   private final Dispatcher dispatcher;
 
   private LocalDirsHandlerService dirsHandler;
-  Path remoteRootLogDir;
+  Path remoteRootLogDir;//聚合后的日志,存储在HDFS的哪个目录上
   String remoteRootLogDirSuffix;
   private NodeId nodeId;
 
+  /**
+   * key是appId,value是该app的日志聚合类,当应用完成的时候,要对该应用的日志进行聚合
+   */
   private final ConcurrentMap<ApplicationId, AppLogAggregator> appLogAggregators;
 
   private final ExecutorService threadPool;
@@ -191,7 +194,7 @@ public class LogAggregationService extends AbstractService implements
     } catch (IOException e) {
       throw new YarnRuntimeException("Unable to get Remote FileSystem instance", e);
     }
-    boolean remoteExists = true;
+    boolean remoteExists = true;//远程根节点是否存在,true表示存在
     try {
       FsPermission perms =
           remoteFS.getFileStatus(this.remoteRootLogDir).getPermission();
@@ -208,7 +211,7 @@ public class LogAggregationService extends AbstractService implements
           "Failed to check permissions for dir ["
               + this.remoteRootLogDir + "]", e);
     }
-    if (!remoteExists) {
+    if (!remoteExists) {//远程节点不存在,则创建该节点
       LOG.warn("Remote Root Log Dir [" + this.remoteRootLogDir
           + "] does not exist. Attempting to create it.");
       try {
@@ -255,7 +258,7 @@ public class LogAggregationService extends AbstractService implements
    */
   private boolean checkExists(FileSystem fs, Path path, FsPermission fsPerm)
       throws IOException {
-    boolean exists = true;
+    boolean exists = true;//true表示该path存在
     try {
       FileStatus appDirStatus = fs.getFileStatus(path);
       if (!APP_DIR_PERMISSIONS.equals(appDirStatus.getPermission())) {
@@ -268,7 +271,7 @@ public class LogAggregationService extends AbstractService implements
   }
 
   /**
-   * 创建app目录
+   * 为一个app创建一系列目录
    */
   protected void createAppDir(final String user, final ApplicationId appId,
       UserGroupInformation userUgi) {
@@ -288,29 +291,28 @@ public class LogAggregationService extends AbstractService implements
             appDir = appDir.makeQualified(remoteFS.getUri(),
                 remoteFS.getWorkingDirectory());
 
-            if (!checkExists(remoteFS, appDir, APP_DIR_PERMISSIONS)) {//该/remoteRootLogDir/user/suffix/appId目录不存在,
+            if (!checkExists(remoteFS, appDir, APP_DIR_PERMISSIONS)) {//该/remoteRootLogDir/user/suffix/appId目录不存在
               Path suffixDir = LogAggregationUtils.getRemoteLogSuffixedDir(
                   LogAggregationService.this.remoteRootLogDir, user,
-                  LogAggregationService.this.remoteRootLogDirSuffix);
+                  LogAggregationService.this.remoteRootLogDirSuffix);//remoteRootLogDir/user/suffix
               suffixDir = suffixDir.makeQualified(remoteFS.getUri(),
                   remoteFS.getWorkingDirectory());
 
-              if (!checkExists(remoteFS, suffixDir, APP_DIR_PERMISSIONS)) {
+              if (!checkExists(remoteFS, suffixDir, APP_DIR_PERMISSIONS)) {//如果remoteRootLogDir/user/suffix目录不存在
                 Path userDir = LogAggregationUtils.getRemoteLogUserDir(
-                    LogAggregationService.this.remoteRootLogDir, user);
+                    LogAggregationService.this.remoteRootLogDir, user);///remoteRootLogDir/user
                 userDir = userDir.makeQualified(remoteFS.getUri(),
                     remoteFS.getWorkingDirectory());
 
-                if (!checkExists(remoteFS, userDir, APP_DIR_PERMISSIONS)) {
-                  createDir(remoteFS, userDir, APP_DIR_PERMISSIONS);
+                if (!checkExists(remoteFS, userDir, APP_DIR_PERMISSIONS)) {//如果/remoteRootLogDir/user目录不存在
+                  createDir(remoteFS, userDir, APP_DIR_PERMISSIONS);//创建目录/remoteRootLogDir/user
                 }
 
-                createDir(remoteFS, suffixDir, APP_DIR_PERMISSIONS);
+                createDir(remoteFS, suffixDir, APP_DIR_PERMISSIONS);//创建目录remoteRootLogDir/user/suffix
               }
 
-              createDir(remoteFS, appDir, APP_DIR_PERMISSIONS);
+              createDir(remoteFS, appDir, APP_DIR_PERMISSIONS);//创建目录/remoteRootLogDir/user/suffix/appId
             }
-
           } catch (IOException e) {
             LOG.error("Failed to setup application log directory for "
                 + appId, e);
@@ -324,6 +326,9 @@ public class LogAggregationService extends AbstractService implements
     }
   }
 
+  /**
+   * 初始化一个应用的聚合处理
+   */
   @SuppressWarnings("unchecked")
   private void initApp(final ApplicationId appId, String user,
       Credentials credentials, ContainerLogsRetentionPolicy logRetentionPolicy,
@@ -362,7 +367,7 @@ public class LogAggregationService extends AbstractService implements
       Map<ApplicationAccessType, String> appAcls,
       LogAggregationContext logAggregationContext) {
 
-    // Get user's FileSystem credentials
+    // Get user's FileSystem credentials 校验user的权限
     final UserGroupInformation userUgi =
         UserGroupInformation.createRemoteUser(user);
     if (credentials != null) {
@@ -418,12 +423,13 @@ public class LogAggregationService extends AbstractService implements
     }
   }
 
-  // for testing only 获取应用日志聚合的数量
+  // for testing only 获取等待聚合的应用的数量
   @Private
   int getNumAggregators() {
     return this.appLogAggregators.size();
   }
 
+  //一个容器完成了,要对该容器如何聚合处理
   private void stopContainer(ContainerId containerId, int exitCode) {
 
     // A container is complete. Put this containers' logs up for aggregation if
@@ -438,6 +444,7 @@ public class LogAggregationService extends AbstractService implements
     aggregator.startContainerLogAggregation(containerId, exitCode == 0);
   }
 
+  //一个app完成了,要对该app的日志进行聚合处理
   private void stopApp(ApplicationId appId) {
 
     // App is complete. Finish up any containers' pending log aggregation and

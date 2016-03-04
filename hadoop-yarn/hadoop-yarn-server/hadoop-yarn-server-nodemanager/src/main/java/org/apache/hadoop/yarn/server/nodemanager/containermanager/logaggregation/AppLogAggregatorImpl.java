@@ -197,7 +197,7 @@ public class AppLogAggregatorImpl implements AppLogAggregator {
   }
 
   /**
-   * 日志上传,核心方法
+   * 上传本地属于该app的日志文件,到HDFS上,即聚合,是该类的核心方法
    */
   private void uploadLogsForContainers() {
     if (this.logAggregationDisabled) {
@@ -390,7 +390,7 @@ public class AppLogAggregatorImpl implements AppLogAggregator {
 
   @SuppressWarnings("unchecked")
   private void doAppLogAggregation() {
-    while (!this.appFinishing.get() && !this.aborted.get()) {
+    while (!this.appFinishing.get() && !this.aborted.get()) {//只要是该app没有终止,也没有完成,则不断循环
       synchronized(this) {
         try {
           if (this.rollingMonitorInterval > 0) {
@@ -398,6 +398,7 @@ public class AppLogAggregatorImpl implements AppLogAggregator {
             if (this.appFinishing.get() || this.aborted.get()) {
               break;
             }
+            //上传本地属于该app的日志文件,到HDFS上,即聚合,是该类的核心方法
             uploadLogsForContainers();
           } else {
             wait(THREAD_SLEEP_TIME);
@@ -415,10 +416,11 @@ public class AppLogAggregatorImpl implements AppLogAggregator {
       return;
     }
 
+    //上传本地属于该app的日志文件,到HDFS上,即聚合,是该类的核心方法
     // App is finished, upload the container logs.
     uploadLogsForContainers();
 
-    // Remove the local app-log-dirs
+    // Remove the local app-log-dirs 删除本地属于该app的日志文件
     List<Path> localAppLogDirs = new ArrayList<Path>();
     for (String rootLogDir : dirsHandler.getLogDirsForCleanup()) {
       Path logPath = new Path(rootLogDir, applicationId);

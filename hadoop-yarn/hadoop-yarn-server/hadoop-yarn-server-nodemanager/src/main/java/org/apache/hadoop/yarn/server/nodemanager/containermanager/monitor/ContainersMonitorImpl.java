@@ -66,9 +66,9 @@ public class ContainersMonitorImpl extends AbstractService implements Containers
   private Configuration conf;
 
   //所有被监控的容器最多可以使用机器的多少物理内存、多少虚拟内存、多少CPU,不过目前这三个指标没有被源代码使用
-  private long maxVmemAllottedForContainers = UNKNOWN_MEMORY_LIMIT;
-  private long maxPmemAllottedForContainers = UNKNOWN_MEMORY_LIMIT;
-  private long maxVCoresAllottedForContainers;
+  private long maxVmemAllottedForContainers = UNKNOWN_MEMORY_LIMIT;//该节点为所有容器分配多少虚拟内存
+  private long maxPmemAllottedForContainers = UNKNOWN_MEMORY_LIMIT;//该节点为所有容器分配多少物理内存
+  private long maxVCoresAllottedForContainers;//该节点为所有容器分配多少CPU
   
   private boolean pmemCheckEnabled;//true表示要校验物理内存,如果为全部容器分配的物理内存,超过了总物理内存的80%,则要发出警告日志
   private boolean vmemCheckEnabled;//true表示要校验虚拟内存
@@ -106,10 +106,12 @@ public class ContainersMonitorImpl extends AbstractService implements Containers
         + this.processTreeClass);
 
     
+    //该节点为所有容器分配多少内存
     long configuredPMemForContainers = conf.getLong(
         YarnConfiguration.NM_PMEM_MB,
         YarnConfiguration.DEFAULT_NM_PMEM_MB) * 1024 * 1024l;
 
+    //该节点为所有容器分配多少CPU
     long configuredVCoresForContainers = conf.getLong(
         YarnConfiguration.NM_VCORES,
         YarnConfiguration.DEFAULT_NM_VCORES);
@@ -353,7 +355,7 @@ public class ContainersMonitorImpl extends AbstractService implements Containers
           LOG.debug("Current ProcessTree list : "+ tmp.substring(0, tmp.length()) + "]");
         }
 
-        // Add new containers 操作刚刚被添加的需要被监控的容器
+        // Add new containers 操作刚刚被添加的需要被监控的容器,一定要先加入新加的,然后在调用删除的
         synchronized (containersToBeAdded) {
           for (Entry<ContainerId, ProcessTreeInfo> entry : containersToBeAdded.entrySet()) {
             ContainerId containerId = entry.getKey();//容器ID

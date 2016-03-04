@@ -51,7 +51,7 @@ import com.google.common.util.concurrent.ThreadFactoryBuilder;
 /**
  * Log Handler which schedules deletion of log files based on the configured log
  * retention time.
- * 不用聚合应用产生的文件，而死调度器在保留一段时间后,将应用的日志删除
+ * 不用聚合应用产生的文件，而此调度器在保留一段时间后,将应用的日志删除
  */
 public class NonAggregatingLogHandler extends AbstractService implements
     LogHandler {

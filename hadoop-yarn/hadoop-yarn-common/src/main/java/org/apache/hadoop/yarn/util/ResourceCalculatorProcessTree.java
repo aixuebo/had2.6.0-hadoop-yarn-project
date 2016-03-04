@@ -81,7 +81,7 @@ public abstract class ResourceCalculatorProcessTree extends Configured {
    *
    * @return cumulative rss memory used by the process-tree in bytes. return 0
    *         if it cannot be calculated
-   * 计算该进程所使用的所有rss内存量
+   * 计算该进程所使用的所有rss内存量,物理内存量
    */
   public long getCumulativeRssmem() {
     return getCumulativeRssmem(0);
@@ -95,6 +95,7 @@ public abstract class ResourceCalculatorProcessTree extends Configured {
    *                      memory addition
    * @return cumulative virtual memory used by the process-tree in bytes,
    *          for processes older than this age.
+   *          虚拟内存量
    */
   public abstract long getCumulativeVmem(int olderThanAge);
 

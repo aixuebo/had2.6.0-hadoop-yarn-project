@@ -32,6 +32,7 @@ public interface AppLogAggregator extends Runnable {
   void startContainerLogAggregation(ContainerId containerId,
       boolean wasContainerSuccessful);
 
+  //当一个应用中途终止了,则调用该方法
   void abortLogAggregation();
 
   /**

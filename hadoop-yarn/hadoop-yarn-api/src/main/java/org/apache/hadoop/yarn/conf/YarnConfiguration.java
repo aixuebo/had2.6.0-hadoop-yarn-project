@@ -777,7 +777,11 @@ public class YarnConfiguration extends Configuration {
     NM_PREFIX +  "log.deletion-threads-count";
   public static final int DEFAULT_NM_LOG_DELETE_THREAD_COUNT = 4;
 
-  /** Where to aggregate logs to.*/
+  /** Where to aggregate logs to.
+   *  将app的日志聚合到HDFS上,此时日志路径的根目录
+   *  一般格式为:
+   *  /remoteRootLogDir/user/suffix/appId/nodeId
+   **/
   public static final String NM_REMOTE_APP_LOG_DIR = 
     NM_PREFIX + "remote-app-log-dir";
   public static final String DEFAULT_NM_REMOTE_APP_LOG_DIR = "/tmp/logs";
@@ -785,6 +789,8 @@ public class YarnConfiguration extends Configuration {
   /**
    * The remote log dir will be created at
    * NM_REMOTE_APP_LOG_DIR/${user}/NM_REMOTE_APP_LOG_DIR_SUFFIX/${appId}
+   * 将app的日志聚合到HDFS上,此时日志路径的suffix
+   * 一般格式为:/remoteRootLogDir/user/suffix/appId/nodeId
    */
   public static final String NM_REMOTE_APP_LOG_DIR_SUFFIX = 
     NM_PREFIX + "remote-app-log-dir-suffix";
@@ -796,7 +802,7 @@ public class YarnConfiguration extends Configuration {
   public static final String YARN_TRACKING_URL_GENERATOR = 
       YARN_PREFIX + "tracking.url.generator";
 
-  /** Amount of memory in GB that can be allocated for containers.*/
+  /** Amount of memory in GB that can be allocated for containers.该节点为所有容器分配多少内存*/
   public static final String NM_PMEM_MB = NM_PREFIX + "resource.memory-mb";
   public static final int DEFAULT_NM_PMEM_MB = 8 * 1024;
 
@@ -810,12 +816,12 @@ public class YarnConfiguration extends Configuration {
       + "vmem-check-enabled";
   public static final boolean DEFAULT_NM_VMEM_CHECK_ENABLED = true;
 
-  /** Conversion ratio for physical memory to virtual memory. */
+  /** Conversion ratio for physical memory to virtual memory. 比例  * 物理内存=虚拟内存,因此该值是比例*/
   public static final String NM_VMEM_PMEM_RATIO =
     NM_PREFIX + "vmem-pmem-ratio";
   public static final float DEFAULT_NM_VMEM_PMEM_RATIO = 2.1f;
   
-  /** Number of Virtual CPU Cores which can be allocated for containers.*/
+  /** Number of Virtual CPU Cores which can be allocated for containers.该节点为所有容器分配多少CPU*/
   public static final String NM_VCORES = NM_PREFIX + "resource.cpu-vcores";
   public static final int DEFAULT_NM_VCORES = 8;
 
