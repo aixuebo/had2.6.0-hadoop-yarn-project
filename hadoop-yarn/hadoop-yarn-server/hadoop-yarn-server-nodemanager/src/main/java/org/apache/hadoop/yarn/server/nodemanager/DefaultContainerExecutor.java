@@ -105,14 +105,26 @@ public class DefaultContainerExecutor extends ContainerExecutor {
     List<String> localDirs = dirsHandler.getLocalDirs();
     List<String> logDirs = dirsHandler.getLogDirs();
     
-    createUserLocalDirs(localDirs, user);//base/usercache/$user
+    createUserLocalDirs(localDirs, user);//dataDirbase/usercache/$user
+    /**
+     * 创建以下两个目录
+     * /dataDirbase/usercache/$user/appcache
+     /dataDirbase/usercache/$user/filecache
+     */
     createUserCacheDirs(localDirs, user);
+    
+    //创建/dataDirbase/usercache/$user/appcache/$appId
     createAppDirs(localDirs, user, appId);
+    
+    //创建目录/logDirsbase/appId
     createAppLogDirs(appId, logDirs, user);
 
     // randomly choose the local directory
+    //在数据目录集合中,最终选择一个目录做为工作目录
+    //返回/dataDirbase/usercache/$user/appcache/$appId
     Path appStorageDir = getWorkingDir(localDirs, user, appId);
 
+    //$work/$locId.tokens 存储token信息
     // $locId.tokens
     String tokenFn = String.format(ContainerLocalizer.TOKEN_FILE_NAME_FMT, locId);
     Path tokenDst = new Path(appStorageDir, tokenFn);
@@ -148,34 +160,40 @@ public class DefaultContainerExecutor extends ContainerExecutor {
         ConverterUtils.toString(
             containerId.getApplicationAttemptId().
                 getApplicationId());
+    
+    //创建/dataDirbase/usercache/$user/appcache/$appId/$containerId目录
     for (String sLocalDir : localDirs) {
-      Path usersdir = new Path(sLocalDir, ContainerLocalizer.USERCACHE);
-      Path userdir = new Path(usersdir, user);
-      Path appCacheDir = new Path(userdir, ContainerLocalizer.APPCACHE);
-      Path appDir = new Path(appCacheDir, appIdStr);
-      Path containerDir = new Path(appDir, containerIdStr);
-      createDir(containerDir, dirPerm, true, user);
+      Path usersdir = new Path(sLocalDir, ContainerLocalizer.USERCACHE);///dataDirbase/usercache
+      Path userdir = new Path(usersdir, user);///dataDirbase/usercache/$user
+      Path appCacheDir = new Path(userdir, ContainerLocalizer.APPCACHE);///dataDirbase/usercache/$user/appcache
+      Path appDir = new Path(appCacheDir, appIdStr);///dataDirbase/usercache/$user/appcache/$appId
+      Path containerDir = new Path(appDir, containerIdStr);///dataDirbase/usercache/$user/appcache/$appId/$containerId
+      createDir(containerDir, dirPerm, true, user);//创建/dataDirbase/usercache/$user/appcache/$appId/$containerId目录
     }
 
     // Create the container log-dirs on all disks
+    //创建容器的日志目录/logDirsbase/$appId/$containerid
     createContainerLogDirs(appIdStr, containerIdStr, logDirs, user);
 
+    //$containerWorkDir./tmp 容器工作目录下创建临时目录
     Path tmpDir = new Path(containerWorkDir,
         YarnConfiguration.DEFAULT_CONTAINER_TEMP_DIR);
     createDir(tmpDir, dirPerm, false, user);
 
 
     // copy container tokens to work dir
+    //$containerWorkDir/container_tokens存储token信息
     Path tokenDst =
       new Path(containerWorkDir, ContainerLaunch.FINAL_CONTAINER_TOKENS_FILE);
     copyFile(nmPrivateTokensPath, tokenDst, user);
 
     // copy launch script to work dir
+    //$containerWorkDir/launch_container.sh 存储启动脚本
     Path launchDst =
         new Path(containerWorkDir, ContainerLaunch.CONTAINER_SCRIPT);
     copyFile(nmPrivateContainerScriptPath, launchDst, user);
 
-    // Create new local launch wrapper script
+    // Create new local launch wrapper script 在本地容器的工作目录下创建包装脚本对象
     LocalWrapperScriptBuilder sb = getLocalWrapperScriptBuilder(
         containerIdStr, containerWorkDir); 
 
@@ -190,6 +208,7 @@ public class DefaultContainerExecutor extends ContainerExecutor {
         WIN_MAX_PATH, YarnConfiguration.NM_LOCAL_DIRS));
     }
 
+    //对容器的执行脚本进行包装,可以使脚本执行后,pid写入指定pidFile文件中
     Path pidFile = getPidFilePath(containerId);
     if (pidFile != null) {
       sb.writeLocalWrapperScript(launchDst, pidFile);
@@ -203,8 +222,8 @@ public class DefaultContainerExecutor extends ContainerExecutor {
     // fork script
     Shell.CommandExecutor shExec = null;
     try {
-      setScriptExecutable(launchDst, user);
-      setScriptExecutable(sb.getWrapperScriptPath(), user);
+      setScriptExecutable(launchDst, user);//为脚本设置可执行权限
+      setScriptExecutable(sb.getWrapperScriptPath(), user);//为脚本设置可执行权限
 
       shExec = buildCommandExecutor(sb.getWrapperScriptPath().toString(),
           containerIdStr, user, pidFile,
@@ -284,12 +303,16 @@ public class DefaultContainerExecutor extends ContainerExecutor {
 
   protected abstract class LocalWrapperScriptBuilder {
 
-    private final Path wrapperScriptPath;
+    private final Path wrapperScriptPath;//$containerWorkDir/default_container_executor.sh
 
     public Path getWrapperScriptPath() {
       return wrapperScriptPath;
     }
 
+    /**
+     * @param launchDst 容器的启动脚本路径
+     * @param pidFile 容器的pid存储路径
+     */
     public void writeLocalWrapperScript(Path launchDst, Path pidFile) throws IOException {
       DataOutputStream out = null;
       PrintStream pout = null;
@@ -306,6 +329,7 @@ public class DefaultContainerExecutor extends ContainerExecutor {
     protected abstract void writeLocalWrapperScript(Path launchDst, Path pidFile,
         PrintStream pout);
 
+    //$containerWorkDir/default_container_executor.sh
     protected LocalWrapperScriptBuilder(Path containerWorkDir) {
       this.wrapperScriptPath = new Path(containerWorkDir,
         Shell.appendScriptExtension("default_container_executor"));
@@ -314,35 +338,73 @@ public class DefaultContainerExecutor extends ContainerExecutor {
 
   private final class UnixLocalWrapperScriptBuilder
       extends LocalWrapperScriptBuilder {
-    private final Path sessionScriptPath;
+    private final Path sessionScriptPath;//$containerWorkDir/default_container_executor_session.sh
 
     public UnixLocalWrapperScriptBuilder(Path containerWorkDir) {
       super(containerWorkDir);
+      
+      //$containerWorkDir/default_container_executor_session.sh
       this.sessionScriptPath = new Path(containerWorkDir,
           Shell.appendScriptExtension("default_container_executor_session"));
     }
 
+    /**
+     * @param launchDst 容器的启动脚本路径
+     * @param pidFile 容器的pid存储路径
+     */
     @Override
     public void writeLocalWrapperScript(Path launchDst, Path pidFile)
         throws IOException {
-      writeSessionScript(launchDst, pidFile);
-      super.writeLocalWrapperScript(launchDst, pidFile);
+      writeSessionScript(launchDst, pidFile);//创建session脚本文件
+      super.writeLocalWrapperScript(launchDst, pidFile);//包装session脚本,将退出码写入到退出文件中
     }
 
+    /**
+     * 
+     * 脚本含义:
+     * 1.执行session脚本.
+     * 2.执行完后,将状态码写入$pidFile.exitcode文件中
+     * 3.按照状态码退出
+     * #!/bin/bash
+     * /bin/bash "$containerWorkDir/default_container_executor_session.sh"
+     * rc=$?
+     * echo $rc >$pidFile.exitcode.tmp
+     * /bin/mv -f $pidFile.exitcode.tmp $pidFile.exitcode
+     * exit $rc
+     * @param launchDst 容器的启动脚本路径
+     * @param pidFile 容器的pid存储路径
+     */
     @Override
     public void writeLocalWrapperScript(Path launchDst, Path pidFile,
         PrintStream pout) {
+    	
+      //$pidFile.exitcode,存储pid进程的退出状态码
       String exitCodeFile = ContainerLaunch.getExitCodeFile(
           pidFile.toString());
       String tmpFile = exitCodeFile + ".tmp";
       pout.println("#!/bin/bash");
       pout.println("/bin/bash \"" + sessionScriptPath.toString() + "\"");
-      pout.println("rc=$?");
+      pout.println("rc=$?");//退出session脚本的返回值
       pout.println("echo $rc > \"" + tmpFile + "\"");
       pout.println("/bin/mv -f \"" + tmpFile + "\" \"" + exitCodeFile + "\"");
       pout.println("exit $rc");
     }
 
+    /**
+     * 生成$containerWorkDir/default_container_executor_session.sh脚本,该脚本的意义是:
+     * 1.执行该脚本的时候,将pid写入pid指定文件下
+     * 2.在本进程内,开启执行launchDst脚本进程,即真正的执行脚本
+     * 
+     * 脚本如下:
+     * #!/bin/bash
+     * echo $$ >$pidFile.tmp
+     * /bin/mv -f $pidFile.tmp $pidFile
+     * exec /bin/bash "$launchDst"
+     * 注意:exec表示在该进程内部执行脚本$launchDst,也就是说不会启动一个新的进程.因此执行launchDst脚本的进程与执行该session文件的进程一致
+     * 因此上面的将执行session脚本的进程写入pidFile文件就是执行launchDst脚本的进程
+     * @param launchDst 容器的启动脚本路径
+     * @param pidFile 容器的pid存储路径
+     */
     private void writeSessionScript(Path launchDst, Path pidFile)
         throws IOException {
       DataOutputStream out = null;
@@ -397,16 +459,21 @@ public class DefaultContainerExecutor extends ContainerExecutor {
     }
   }
 
+  /**
+   * 发送信号给一个进程,杀死该进程
+   * (non-Javadoc)
+   * @see org.apache.hadoop.yarn.server.nodemanager.ContainerExecutor#signalContainer(java.lang.String, java.lang.String, org.apache.hadoop.yarn.server.nodemanager.ContainerExecutor.Signal)
+   */
   @Override
   public boolean signalContainer(String user, String pid, Signal signal)
       throws IOException {
     LOG.debug("Sending signal " + signal.getValue() + " to pid " + pid
         + " as user " + user);
-    if (!containerIsAlive(pid)) {
+    if (!containerIsAlive(pid)) {//false说明pid不合法,已经不是存活的进程了
       return false;
     }
     try {
-      killContainer(pid, signal);
+      killContainer(pid, signal);//杀死进程,以什么信号去杀死该进程
     } catch (IOException e) {
       if (!containerIsAlive(pid)) {
         return false;
@@ -427,6 +494,8 @@ public class DefaultContainerExecutor extends ContainerExecutor {
    * 
    * @param pid String pid
    * @return boolean true if the process is alive
+   * 执行杀死该进程的命令
+   * kill -0 pid
    */
   @VisibleForTesting
   public static boolean containerIsAlive(String pid) throws IOException {
@@ -444,16 +513,20 @@ public class DefaultContainerExecutor extends ContainerExecutor {
 
   /**
    * Send a specified signal to the specified pid
-   *
+   * 发送信号给一个进程,杀死该进程
    * @param pid the pid of the process [group] to signal.
    * @param signal signal to send
    * (for logging).
+   * 执行命令 kill -signal.value pid
    */
   protected void killContainer(String pid, Signal signal) throws IOException {
     new ShellCommandExecutor(Shell.getSignalKillCommand(signal.getValue(), pid))
       .execute();
   }
 
+  /**
+   * 删除$baseDirs/$subDir目录
+   */
   @Override
   public void deleteAsUser(String user, Path subDir, Path... baseDirs)
       throws IOException, InterruptedException {
@@ -535,10 +608,13 @@ public class DefaultContainerExecutor extends ContainerExecutor {
     }
   }
 
+  //在数据目录集合中,最终选择一个目录做为工作目录
+  //返回/base/usercache/$user/appcache/$appId
   protected Path getWorkingDir(List<String> localDirs, String user,
       String appId) throws IOException {
     Path appStorageDir = null;
-    long totalAvailable = 0L;
+    long totalAvailable = 0L;//所有磁盘剩余总可用空间
+    //每一个磁盘剩余可用空间
     long[] availableOnDisk = new long[localDirs.size()];
     int i = 0;
     // randomly choose the app directory
@@ -547,7 +623,7 @@ public class DefaultContainerExecutor extends ContainerExecutor {
     // firstly calculate the sum of all available space on these directories
     for (String localDir : localDirs) {
       Path curBase = getApplicationDir(new Path(localDir),
-          user, appId);
+          user, appId);///base/usercache/$user/appcache/$appId
       long space = 0L;
       try {
         space = getDiskFreeSpace(curBase);
@@ -567,7 +643,7 @@ public class DefaultContainerExecutor extends ContainerExecutor {
     // make probability to pick a directory proportional to
     // the available space on the directory.
     Random r = new Random();
-    long randomPosition = Math.abs(r.nextLong()) % totalAvailable;
+    long randomPosition = Math.abs(r.nextLong()) % totalAvailable;//随机一个地方
     int dir = 0;
     // skip zero available space directory,
     // because totalAvailable is greater than 0 and randomPosition
@@ -576,9 +652,13 @@ public class DefaultContainerExecutor extends ContainerExecutor {
     while (availableOnDisk[dir] == 0L) {
       dir++;
     }
+    
+    //寻找到该随机的位置,在哪个磁盘,则返回该磁盘作为work工作目录
     while (randomPosition > availableOnDisk[dir]) {
       randomPosition -= availableOnDisk[dir++];
     }
+    
+    ///base/usercache/$user/appcache/$appId
     appStorageDir = getApplicationDir(new Path(localDirs.get(dir)),
         user, appId);
 
@@ -590,6 +670,8 @@ public class DefaultContainerExecutor extends ContainerExecutor {
    * <ul>.mkdir
    * <li>$local.dir/usercache/$user</li>
    * </ul>
+   * 
+   * 创建目录/base/usercache/$user
    */
   void createUserLocalDirs(List<String> localDirs, String user)
       throws IOException {
@@ -619,27 +701,30 @@ public class DefaultContainerExecutor extends ContainerExecutor {
    * <li>$local.dir/usercache/$user/appcache</li>
    * <li>$local.dir/usercache/$user/filecache</li>
    * </ul>
+   * 创建以下两个目录
+   * /base/usercache/$user/appcache
+     /base/usercache/$user/filecache
    */
   void createUserCacheDirs(List<String> localDirs, String user)
       throws IOException {
     LOG.info("Initializing user " + user);
 
-    boolean appcacheDirStatus = false;
-    boolean distributedCacheDirStatus = false;
+    boolean appcacheDirStatus = false;//app目录是否创建成功
+    boolean distributedCacheDirStatus = false;//是否创建了/base/usercache/$user/filecache目录
     FsPermission appCachePerms = new FsPermission(APPCACHE_PERM);
     FsPermission fileperms = new FsPermission(FILECACHE_PERM);
 
     for (String localDir : localDirs) {
       // create $local.dir/usercache/$user/appcache
       Path localDirPath = new Path(localDir);
-      final Path appDir = getAppcacheDir(localDirPath, user);
+      final Path appDir = getAppcacheDir(localDirPath, user);///base/usercache/$user/appcache
       try {
         createDir(appDir, appCachePerms, true, user);
         appcacheDirStatus = true;
       } catch (IOException e) {
         LOG.warn("Unable to create app cache directory : " + appDir, e);
       }
-      // create $local.dir/usercache/$user/filecache
+      // create /base/usercache/$user/filecache
       final Path distDir = getFileCacheDir(localDirPath, user);
       try {
         createDir(distDir, fileperms, true, user);
@@ -666,12 +751,14 @@ public class DefaultContainerExecutor extends ContainerExecutor {
    * <li>$local.dir/usercache/$user/appcache/$appid</li>
    * </ul>
    * @param localDirs 
+   * 创建/base/usercache/$user/appcache/$appId
    */
   void createAppDirs(List<String> localDirs, String user, String appId)
       throws IOException {
     boolean initAppDirStatus = false;
     FsPermission appperms = new FsPermission(APPDIR_PERM);
     for (String localDir : localDirs) {
+    	///base/usercache/$user/appcache/$appId
       Path fullAppDir = getApplicationDir(new Path(localDir), user, appId);
       // create $local.dir/usercache/$user/appcache/$appId
       try {
@@ -690,6 +777,7 @@ public class DefaultContainerExecutor extends ContainerExecutor {
 
   /**
    * Create application log directories on all disks.
+   * 创建目录/base/appId
    */
   void createAppLogDirs(String appId, List<String> logDirs, String user)
       throws IOException {
@@ -698,7 +786,7 @@ public class DefaultContainerExecutor extends ContainerExecutor {
     FsPermission appLogDirPerms = new FsPermission(LOGDIR_PERM);
     for (String rootLogDir : logDirs) {
       // create $log.dir/$appid
-      Path appLogDir = new Path(rootLogDir, appId);
+      Path appLogDir = new Path(rootLogDir, appId);//创建目录/base/appId
       try {
         createDir(appLogDir, appLogDirPerms, true, user);
       } catch (IOException e) {
@@ -715,6 +803,7 @@ public class DefaultContainerExecutor extends ContainerExecutor {
 
   /**
    * Create application log directories on all disks.
+   * 创建容器的日志目录/logDirsbase/$appId/$containerid
    */
   void createContainerLogDirs(String appId, String containerId,
       List<String> logDirs, String user) throws IOException {
@@ -723,8 +812,8 @@ public class DefaultContainerExecutor extends ContainerExecutor {
     FsPermission containerLogDirPerms = new FsPermission(LOGDIR_PERM);
     for (String rootLogDir : logDirs) {
       // create $log.dir/$appid/$containerid
-      Path appLogDir = new Path(rootLogDir, appId);
-      Path containerLogDir = new Path(appLogDir, containerId);
+      Path appLogDir = new Path(rootLogDir, appId);///logDirsbase/$appId
+      Path containerLogDir = new Path(appLogDir, containerId);///logDirsbase/$appId/$containerid
       try {
         createDir(containerLogDir, containerLogDirPerms, true, user);
       } catch (IOException e) {

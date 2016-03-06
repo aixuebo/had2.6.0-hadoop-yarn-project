@@ -73,6 +73,7 @@ import com.google.common.util.concurrent.ThreadFactoryBuilder;
 
 /**
  * 容器的本地化,一个容器对应一个该对象
+ * 下载该容器对应的所有资源,直到下载结束为止
  */
 public class ContainerLocalizer {
 
@@ -101,7 +102,7 @@ public class ContainerLocalizer {
   private final Configuration conf;
   private final RecordFactory recordFactory;
   private final Map<LocalResource,Future<Path>> pendingResources;//等待下载的资源
-  private final String appCacheDirContextName;//appId.app.cache.dirs
+  private final String appCacheDirContextName;//$appId.app.cache.dirs
 
   public ContainerLocalizer(FileContext lfs, String user, String appId,
       String localizerId, List<Path> localDirs,
@@ -119,7 +120,7 @@ public class ContainerLocalizer {
     this.localizerId = localizerId;
     this.recordFactory = recordFactory;
     this.conf = new Configuration();
-    this.appCacheDirContextName = String.format(APPCACHE_CTXT_FMT, appId);
+    this.appCacheDirContextName = String.format(APPCACHE_CTXT_FMT, appId);//$appId.app.cache.dirs
     this.pendingResources = new HashMap<LocalResource,Future<Path>>();
   }
 
@@ -129,6 +130,10 @@ public class ContainerLocalizer {
       rpc.getProxy(LocalizationProtocol.class, nmAddr, conf);
   }
 
+  /**
+   * @param nmAddr 是本地的监听地址,因为容器启动是一个JVM进程,因此该容器要向datanode发送信息的时候,需要使用RPC方式
+   * 该监听地址参数,是datanode本地节点的RPC服务端
+   */
   @SuppressWarnings("deprecation")
   public int runLocalization(final InetSocketAddress nmAddr)
       throws IOException, InterruptedException {
@@ -391,10 +396,12 @@ public class ContainerLocalizer {
    * @param user 该容器所属用户
    * @param appId 该容器是哪个应用的容器
    * @param localDirs 本节点可以使用的磁盘路径集合 
-   * 1.创建$x/usercache/$user
-   * 2.创建$x/usercache/$user/filecache
-   * 3.创建$x/usercache/$user/appcache/$appId
-   * 4.创建$x/usercache/$user/appcache/$appId/filecache
+   * 1.创建$dataDirbase/usercache/$user
+   * 2.创建$dataDirbase/usercache/$user/filecache
+   * 3.创建$dataDirbase/usercache/$user/appcache/$appId
+   * 4.创建$dataDirbase/usercache/$user/appcache/$appId/filecache
+   * 
+   * 初始化数据的存储目录,分别是user的存储目录,或者app的存储目录
    */
   private static void initDirs(Configuration conf, String user, String appId,
       FileContext lfs, List<Path> localDirs) throws IOException {
@@ -402,22 +409,25 @@ public class ContainerLocalizer {
       throw new IOException("Cannot initialize without local dirs");
     }
     
-    //存储路径集合:$x/usercache/$user/appcache/$appId/filecache
+    //存储路径集合:$dataDirbase/usercache/$user/appcache/$appId/filecache
     String[] appsFileCacheDirs = new String[localDirs.size()];
-    //存储路径集合:$x/usercache/$user/filecache
+    //存储路径集合:$dataDirbase/usercache/$user/filecache
     String[] usersFileCacheDirs = new String[localDirs.size()];
     
     for (int i = 0, n = localDirs.size(); i < n; ++i) {
-      // $x/usercache/$user
+      //$dataDirbase/usercache/$user
       Path base = lfs.makeQualified(
           new Path(new Path(localDirs.get(i), USERCACHE), user));
-      // $x/usercache/$user/filecache
+      
+      //$dataDirbase/usercache/$user/filecache
       Path userFileCacheDir = new Path(base, FILECACHE);
       usersFileCacheDirs[i] = userFileCacheDir.toString();
       createDir(lfs, userFileCacheDir, FILECACHE_PERMS, false);
-      // $x/usercache/$user/appcache/$appId
+      
+      
+      //$dataDirbase/usercache/$user/appcache/$appId
       Path appBase = new Path(base, new Path(APPCACHE, appId));
-      // $x/usercache/$user/appcache/$appId/filecache
+      //$dataDirbase/usercache/$user/appcache/$appId/filecache
       Path appFileCacheDir = new Path(appBase, FILECACHE);
       appsFileCacheDirs[i] = appFileCacheDir.toString();
       createDir(lfs, appFileCacheDir, FILECACHE_PERMS, false);
