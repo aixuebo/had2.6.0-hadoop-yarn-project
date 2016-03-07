@@ -22,7 +22,7 @@ import org.apache.hadoop.yarn.api.records.ContainerId;
 import org.apache.hadoop.yarn.server.nodemanager.containermanager.localizer.LocalResourceRequest;
 
 /**
- * 对每一个容器发送该事件,表示资源已经下载完成
+ * 对每一个容器发送该事件,表示该容器的一个资源已经下载完成
  * 传入参数是资源下载到哪个路径下,以及下载的资源大小
  */
 public class ContainerResourceLocalizedEvent extends ContainerResourceEvent {

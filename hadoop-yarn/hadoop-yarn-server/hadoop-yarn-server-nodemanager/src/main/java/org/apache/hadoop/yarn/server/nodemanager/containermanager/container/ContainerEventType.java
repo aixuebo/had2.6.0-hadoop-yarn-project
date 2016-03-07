@@ -29,7 +29,7 @@ public enum ContainerEventType {
 
   // DownloadManager
   CONTAINER_INITED,
-  RESOURCE_LOCALIZED,//资源加载完成
+  RESOURCE_LOCALIZED,//一个资源加载完成
   RESOURCE_FAILED,//资源加载失败
   CONTAINER_RESOURCES_CLEANEDUP,//容器资源清理
 

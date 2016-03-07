@@ -89,10 +89,10 @@ public class ContainerImpl implements Container {
   private final ContainerId containerId;
   private final Resource resource;
   private final String user;
-  private int exitCode = ContainerExitStatus.INVALID;
+  private int exitCode = ContainerExitStatus.INVALID;//容器退出的状态码
   //存储容器更新的信息,里面包含\r\n回车换行
   private final StringBuilder diagnostics;
-  private boolean wasLaunched;
+  private boolean wasLaunched;//true表示该容器已经被启动了,即已经执行完了加载资源的流程了
 
   /** The NM-wide configuration - not specific to this container */
   private final Configuration daemonConf;
@@ -529,6 +529,7 @@ public class ContainerImpl implements Container {
 
   /**
    * 资源文件都被加载完成后调用该方法,开启容器
+   * 发送ContainersLauncherEventType.LAUNCH_CONTAINER事件
    */
   @SuppressWarnings("unchecked") // dispatcher not typed
   private void sendLaunchEvent() {

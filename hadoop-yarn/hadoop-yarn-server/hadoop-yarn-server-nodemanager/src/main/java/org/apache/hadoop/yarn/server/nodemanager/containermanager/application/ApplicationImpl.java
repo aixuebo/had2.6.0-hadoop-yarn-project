@@ -61,6 +61,40 @@ import com.google.common.annotations.VisibleForTesting;
  * The state machine for the representation of an Application
  * within the NodeManager.
  * 该类表示在该节点上处理的应用对象,以及处理应用的一些事件
+ * 
+ * 
+App流程ApplicationEventType
+1.INIT_APPLICATION 进行app的初始化工作
+a.添加该app的权限信息
+b.发送LogHandlerEventType.APPLICATION_STARTED
+2.APPLICATION_LOG_HANDLING_INITED,//应用的日志初始化完成
+a.发送LocalizationEventType.INIT_APPLICATION_RESOURCES,初始化该应用资源信息
+3.APPLICATION_INITED 表示已经app初始化结束了,开始执行容器了
+a.ContainerEventType.INIT_CONTAINER 循环所有该app的容器,进行容器初始化
+4.APPLICATION_CONTAINER_FINISHED
+ 容器完成的时候触发该函数
+a.app会删除该容器的映射关系
+5.FINISH_APPLICATION 完成该app
+ resourceManager发来的信息,表示该应用完成,该完成可能是正常的完成,也可以应用异常导致的完成
+a.如果此时该app内的容器集合为空,说明没有容器了,因此执行该app的清理工作,返回ApplicationState.APPLICATION_RESOURCES_CLEANINGUP状态
+发送LocalizationEventType.DESTROY_APPLICATION_RESOURCES事件,清理该app的资源
+发送AuxServicesEventType.APPLICATION_STOP事件,说明该app已经结束了,第三方扩展包也要结束
+b.如果此时该app的容器集合有内容,则对每一个容器进行kill处理,返回ApplicationState.FINISHING_CONTAINERS_WAIT状态
+ 执行ContainerEventType.KILL_CONTAINER事件
+6.APPLICATION_CONTAINER_FINISHED,说明该应用的容器也完成了
+在ApplicationState.FINISHING_CONTAINERS_WAIT状态下,可以转换成ApplicationState.FINISHING_CONTAINERS_WAIT或者ApplicationState.APPLICATION_RESOURCES_CLEANINGUP状态
+a.从该app的容器集合中删除这个完成的容器
+b.如果容器集合依然不是空,则还是返回ApplicationState.FINISHING_CONTAINERS_WAIT状态,说明有容器正在被杀死过程中
+c.如果容器集合已经是空了,则返回ApplicationState.APPLICATION_RESOURCES_CLEANINGUP状态
+发送LocalizationEventType.DESTROY_APPLICATION_RESOURCES事件,清理该app的资源
+发送AuxServicesEventType.APPLICATION_STOP事件,说明该app已经结束了,第三方扩展包也要结束
+7.APPLICATION_RESOURCES_CLEANEDUP 清理该app下的所有资源
+ApplicationState.APPLICATION_RESOURCES_CLEANINGUP状态下,遇到该事件,则进行如下处理
+a.发送LogHandlerEventType.APPLICATION_FINISHED事件,清理该app下的日志资源
+8.APPLICATION_LOG_HANDLING_FINISHED 该app资源下的日志资源已经清理完成
+a.该app从context上下文中彻底移除
+b.移除该app的权限西西
+c.删除该app的所有记录,即因此该app彻底结束
  */
 public class ApplicationImpl implements Application {
 
