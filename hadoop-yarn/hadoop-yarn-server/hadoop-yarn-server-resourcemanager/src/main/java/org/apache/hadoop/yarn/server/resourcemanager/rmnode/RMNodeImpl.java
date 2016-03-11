@@ -544,7 +544,7 @@ public class RMNodeImpl implements RMNode, EventHandler<RMNodeEvent> {
         // Old node rejoining 返回以前存在的节点
         RMNode previouRMNode = rmNode.context.getInactiveRMNodes().get(host);
         //移除以前的host对应的NodeManager节点
-        rmNode.context.getInactiveRMNodes().remove(host);
+        rmNode.context.getInactiveRMNodes().remove(host);//如果该曾经是node是不活跃的,则现在活跃了,则从集合中删除
         rmNode.updateMetricsForRejoinedNode(previouRMNode.getState());
       } else {
         // Increment activeNodes explicitly because this is a new node.

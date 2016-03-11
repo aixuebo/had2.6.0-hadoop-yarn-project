@@ -65,7 +65,7 @@ public interface RMContext {
   ConcurrentMap<ApplicationId, ByteBuffer> getSystemCredentialsForApps();
 
   /**
-   * key是host,value是RMNodeImpl,即已经在ResourceManager中激活的所有NodeManager节点与节点所在host的映射管理
+   * key是host,value是RMNodeImpl,即不活跃的Node节点
    */
   ConcurrentMap<String, RMNode> getInactiveRMNodes();
 

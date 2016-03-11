@@ -31,10 +31,10 @@ import org.apache.hadoop.yarn.server.api.records.NodeHealthStatus;
  */
 public class RMNodeStatusEvent extends RMNodeEvent {
 
-  private final NodeHealthStatus nodeHealthStatus;//记录上一次该远程节点的健康检查统计信息
-  private final List<ContainerStatus> containersCollection;
-  private final NodeHeartbeatResponse latestResponse;//针对该节点的心跳回复统计信息
-  private final List<ApplicationId> keepAliveAppIds;
+   private final NodeHealthStatus nodeHealthStatus;//记录上一次该远程节点的健康检查统计信息
+   private final List<ContainerStatus> containersCollection;//目前正在运行的容器状态
+   private final NodeHeartbeatResponse latestResponse;//针对该节点的心跳回复统计信息
+   private final List<ApplicationId> keepAliveAppIds;//应该被关闭的应用.但是此时还存在,这样的一个集合
 
   public RMNodeStatusEvent(NodeId nodeId, NodeHealthStatus nodeHealthStatus,
       List<ContainerStatus> collection, List<ApplicationId> keepAliveAppIds,
