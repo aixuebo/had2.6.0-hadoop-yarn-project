@@ -34,16 +34,16 @@ public enum RMAppAttemptEventType {
   EXPIRE,//通知ResourceManager这个应用已经过期了,即app的尝试任务ApplicationMaster长时间没有心跳反应了
   
   // Source: ApplicationMasterService
-  REGISTERED,//当AM注册到RM的时候,发送一个事件
+  REGISTERED,//表示AM完全注册到RM了,发送一个事件,尝试任务的状态从LAUNCHED变成RUNNING状态
   STATUS_UPDATE,//更新AM的执行进度
   UNREGISTERED,
 
   // Source: Containers
-  CONTAINER_ALLOCATED,
+  CONTAINER_ALLOCATED,//有容器分配给该尝试任务了
   CONTAINER_FINISHED,
   
   // Source: RMStateStore
-  ATTEMPT_NEW_SAVED,
+  ATTEMPT_NEW_SAVED,//AM信息已经保存完成
   ATTEMPT_UPDATE_SAVED,
 
   // Source: Scheduler

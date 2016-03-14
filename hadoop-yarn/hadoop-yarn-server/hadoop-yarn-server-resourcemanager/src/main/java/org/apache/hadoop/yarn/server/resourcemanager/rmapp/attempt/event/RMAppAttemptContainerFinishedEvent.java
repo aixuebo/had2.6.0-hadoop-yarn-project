@@ -24,10 +24,11 @@ import org.apache.hadoop.yarn.api.records.NodeId;
 import org.apache.hadoop.yarn.server.resourcemanager.rmapp.attempt.RMAppAttemptEvent;
 import org.apache.hadoop.yarn.server.resourcemanager.rmapp.attempt.RMAppAttemptEventType;
 
+//尝试任务的一个容器完成了
 public class RMAppAttemptContainerFinishedEvent extends RMAppAttemptEvent {
 
-  private final ContainerStatus containerStatus;
-  private final NodeId nodeId;
+  private final ContainerStatus containerStatus;//容器完成后的状态
+  private final NodeId nodeId;//容器在哪个节点上完成的
 
   public RMAppAttemptContainerFinishedEvent(ApplicationAttemptId appAttemptId, 
       ContainerStatus containerStatus, NodeId nodeId) {

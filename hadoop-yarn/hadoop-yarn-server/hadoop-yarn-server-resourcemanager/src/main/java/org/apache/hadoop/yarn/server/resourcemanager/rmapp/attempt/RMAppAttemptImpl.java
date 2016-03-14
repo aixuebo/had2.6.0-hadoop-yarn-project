@@ -136,6 +136,7 @@ public class RMAppAttemptImpl implements RMAppAttempt, Recoverable {
   private Token<AMRMTokenIdentifier> amrmToken = null;
   private SecretKey clientTokenMasterKey = null;
 
+  //该尝试任务的所有容器,在哪些节点上完成的,key是节点ID,value是该节点上完成的容器状态集合
   private ConcurrentMap<NodeId, List<ContainerStatus>> justFinishedContainers = new ConcurrentHashMap<NodeId, List<ContainerStatus>>();
       
   // Tracks the previous finished containers that are waiting to be
@@ -143,13 +144,13 @@ public class RMAppAttemptImpl implements RMAppAttempt, Recoverable {
   // request it implicitly acks this list.
   private ConcurrentMap<NodeId, List<ContainerStatus>> finishedContainersSentToAM = new ConcurrentHashMap<NodeId, List<ContainerStatus>>();
       
-  private Container masterContainer;
+  private Container masterContainer;//am所对应的容器
 
   private float progress = 0;
-  private String host = "N/A";
-  private int rpcPort = -1;
-  private String originalTrackingUrl = "N/A";
-  private String proxiedTrackingUrl = "N/A";
+  private String host = "N/A";//AM所在的host
+  private int rpcPort = -1;//AM所在的rpc端口
+  private String originalTrackingUrl = "N/A";//AM所对应的原始url,http://123.344.39.68:8088/cluster/app/application_1446071754254_96426
+  private String proxiedTrackingUrl = "N/A";//AM所对应的代理url
   private long startTime = 0;
   private long finishTime = 0;
 
@@ -169,14 +170,15 @@ public class RMAppAttemptImpl implements RMAppAttempt, Recoverable {
   private static final ExpiredTransition EXPIRED_TRANSITION =
       new ExpiredTransition();
 
-  private RMAppAttemptEvent eventCausingFinalSaving;
-  private RMAppAttemptState targetedFinalState;
   private RMAppAttemptState recoveredFinalState;
-  private RMAppAttemptState stateBeforeFinalSaving;
-  private Object transitionTodo;
+  
+  private RMAppAttemptEvent eventCausingFinalSaving;//中间缓存的事件
+  private RMAppAttemptState targetedFinalState;//最终转化的状态
+  private RMAppAttemptState stateBeforeFinalSaving;//缓存开始执行前的状态
+  private Object transitionTodo;//日后要处理的逻辑
   
   private RMAppAttemptMetrics attemptMetrics = null;
-  private ResourceRequest amReq = null;
+  private ResourceRequest amReq = null;//设置AM所需要的资源
 
   private static final StateMachineFactory<RMAppAttemptImpl,
                                            RMAppAttemptState,
@@ -563,6 +565,7 @@ public class RMAppAttemptImpl implements RMAppAttempt, Recoverable {
     }
   }
 
+  //http://123.344.39.68:8088/cluster/app/application_1446071754254_96426
   private void setTrackingUrlToRMAppPage() {
     originalTrackingUrl = pjoin(
         WebAppUtils.getResolvedRMWebAppURLWithScheme(conf),
@@ -901,22 +904,23 @@ public class RMAppAttemptImpl implements RMAppAttempt, Recoverable {
     public RMAppAttemptState transition(RMAppAttemptImpl appAttempt,
         RMAppAttemptEvent event) {
       ApplicationSubmissionContext subCtx = appAttempt.submissionContext;
-      if (!subCtx.getUnmanagedAM()) {
+      if (!subCtx.getUnmanagedAM()) {//fasle表示AM由任意一个node去执行
         // Need reset #containers before create new attempt, because this request
         // will be passed to scheduler, and scheduler will deduct the number after
         // AM container allocated
         
-        // Currently, following fields are all hard code,
+        // Currently, following fields are all hard code,以下是硬编码
         // TODO: change these fields when we want to support
         // priority/resource-name/relax-locality specification for AM containers
         // allocation.
         appAttempt.amReq.setNumContainers(1);
         appAttempt.amReq.setPriority(AM_CONTAINER_PRIORITY);
-        appAttempt.amReq.setResourceName(ResourceRequest.ANY);
+        appAttempt.amReq.setResourceName(ResourceRequest.ANY);//在任意节点上都可以运行该AM
         appAttempt.amReq.setRelaxLocality(true);
         
         // SchedulerUtils.validateResourceRequests is not necessary because
         // AM resource has been checked when submission
+        //去队列中申请AM的资源,即为该尝试任务ID申请一个容器,所需要资源是amReq,释放容器是空集合,没有黑名单因此是null
         Allocation amContainerAllocation =
             appAttempt.scheduler.allocate(appAttempt.applicationAttemptId,
                 Collections.singletonList(appAttempt.amReq),
@@ -940,7 +944,7 @@ public class RMAppAttemptImpl implements RMAppAttempt, Recoverable {
     @Override
     public RMAppAttemptState transition(RMAppAttemptImpl appAttempt,
         RMAppAttemptEvent event) {
-      // Acquire the AM container from the scheduler.
+      // Acquire the AM container from the scheduler.从调度器中获取AM的容器
       Allocation amContainerAllocation =
           appAttempt.scheduler.allocate(appAttempt.applicationAttemptId,
             EMPTY_CONTAINER_REQUEST_LIST, EMPTY_CONTAINER_RELEASE_LIST, null,
@@ -948,23 +952,29 @@ public class RMAppAttemptImpl implements RMAppAttempt, Recoverable {
       // There must be at least one container allocated, because a
       // CONTAINER_ALLOCATED is emitted after an RMContainer is constructed,
       // and is put in SchedulerApplication#newlyAllocatedContainers.
+      //这里必须有至少一个容器被分配了,因为一个CONTAINER_ALLOCATED事件被发射,是RM容器被构造后产生的,所以一定有至少一个容器
 
       // Note that YarnScheduler#allocate is not guaranteed to be able to
       // fetch it since container may not be fetchable for some reason like
       // DNS unavailable causing container token not generated. As such, we
       // return to the previous state and keep retry until am container is
       // fetched.
-      if (amContainerAllocation.getContainers().size() == 0) {
+      //注意,yarn调度器的allocate方法,不保证一定能抓取到资源,可能有很多原因导致抓取不到资源
+      //例如DNS不可用原因,容器token不能产生,因此我们要返回以前的状态,即SCHEDULED状态,保持重新尝试,直到am容器被抓取到
+      if (amContainerAllocation.getContainers().size() == 0) {//说明调度器没有为AM分配到容器
         appAttempt.retryFetchingAMContainer(appAttempt);
         return RMAppAttemptState.SCHEDULED;
       }
 
-      // Set the masterContainer
+      // Set the masterContainer 设置第一个容器为AM容器
       appAttempt.setMasterContainer(amContainerAllocation.getContainers()
           .get(0));
+      
+      //通过调度器获取到该AM容器的实例
       RMContainerImpl rmMasterContainer = (RMContainerImpl)appAttempt.scheduler
           .getRMContainer(appAttempt.getMasterContainer().getId());
-      rmMasterContainer.setAMContainer(true);
+      rmMasterContainer.setAMContainer(true);//设置该容器是AM容器
+      
       // The node set in NMTokenSecrentManager is used for marking whether the
       // NMToken has been issued for this node to the AM.
       // When AM container was allocated to RM itself, the node which allocates
@@ -980,6 +990,7 @@ public class RMAppAttemptImpl implements RMAppAttempt, Recoverable {
     }
   }
 
+  //创建一个单独的线程,非阻塞的去发送RMAppAttemptEventType.CONTAINER_ALLOCATED事件
   private void retryFetchingAMContainer(final RMAppAttemptImpl appAttempt) {
     // start a new thread so that we are not blocking main dispatcher thread.
     new Thread() {
@@ -1173,6 +1184,7 @@ public class RMAppAttemptImpl implements RMAppAttempt, Recoverable {
     }
   }
   
+  //最终一步处理
   private static class BaseFinalTransition extends BaseTransition {
 
     private final RMAppAttemptState finalAttemptState;
@@ -1203,8 +1215,8 @@ public class RMAppAttemptImpl implements RMAppAttempt, Recoverable {
         case KILLED:
         {
           // don't leave the tracking URL pointing to a non-existent AM
-          appAttempt.setTrackingUrlToRMAppPage();
-          appAttempt.invalidateAMHostAndPort();
+          appAttempt.setTrackingUrlToRMAppPage();//设置app的网页url
+          appAttempt.invalidateAMHostAndPort();//重置AM所在的host和rpc的port
           appEvent =
               new RMAppFailedAttemptEvent(applicationId,
                   RMAppEventType.ATTEMPT_KILLED,
@@ -1214,8 +1226,8 @@ public class RMAppAttemptImpl implements RMAppAttempt, Recoverable {
         case FAILED:
         {
           // don't leave the tracking URL pointing to a non-existent AM
-          appAttempt.setTrackingUrlToRMAppPage();
-          appAttempt.invalidateAMHostAndPort();
+          appAttempt.setTrackingUrlToRMAppPage();//设置app的网页url
+          appAttempt.invalidateAMHostAndPort();//重置AM所在的host和rpc的port
 
           if (appAttempt.submissionContext
             .getKeepContainersAcrossApplicationAttempts()
@@ -1264,11 +1276,12 @@ public class RMAppAttemptImpl implements RMAppAttempt, Recoverable {
     @Override
     public void transition(RMAppAttemptImpl appAttempt,
                             RMAppAttemptEvent event) {
-      // Register with AMLivelinessMonitor
+      // Register with AMLivelinessMonitor 注册监控AM
       appAttempt.attemptLaunched();
 
       // register the ClientTokenMasterKey after it is saved in the store,
       // otherwise client may hold an invalid ClientToken after RM restarts.
+      //注册token
       appAttempt.rmContext.getClientToAMTokenSecretManager()
       .registerApplication(appAttempt.getAppAttemptId(),
         appAttempt.getClientTokenMasterKey());
@@ -1400,6 +1413,9 @@ public class RMAppAttemptImpl implements RMAppAttempt, Recoverable {
     }
   }
 
+  /**
+   * AM的所在容器崩溃时候触发该函数
+   */
   private void setAMContainerCrashedDiagnosticsAndExitStatus(
       RMAppAttemptContainerFinishedEvent finishEvent) {
     ContainerStatus status = finishEvent.getContainerStatus();
