@@ -19,6 +19,6 @@
 package org.apache.hadoop.yarn.server.resourcemanager.amlauncher;
 
 public enum AMLauncherEventType {
-  LAUNCH,
-  CLEANUP
+  LAUNCH,//启动AM
+  CLEANUP//关闭AM已经启动的容器
 }

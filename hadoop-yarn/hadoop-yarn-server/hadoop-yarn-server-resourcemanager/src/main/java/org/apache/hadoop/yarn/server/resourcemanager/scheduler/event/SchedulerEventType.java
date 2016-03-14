@@ -31,8 +31,8 @@ public enum SchedulerEventType {
   APP_REMOVED,
 
   // Source: RMAppAttempt
-  APP_ATTEMPT_ADDED,
-  APP_ATTEMPT_REMOVED,
+  APP_ATTEMPT_ADDED,//创建一个app的尝试任务,提交到队列中来了
+  APP_ATTEMPT_REMOVED,//app的尝试任务从队列中删除
 
   // Source: ContainerAllocationExpirer
   CONTAINER_EXPIRED

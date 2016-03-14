@@ -28,11 +28,14 @@ public enum RMAppState {
   NEW_SAVING,//说明app正在向RMStateStore里面写入日志中
   SUBMITTED,//说明app已经提交到调度器中了
   ACCEPTED,//说明调度器已经接受了该app了
-  RUNNING,
+  
+  RUNNING,//该app已经开始被调度运行了
   FINAL_SAVING,
-  FINISHING,
-  FINISHED,
-  FAILED,
-  KILLING,
-  KILLED
+  
+  KILLING,//正在kill过程中
+  FINISHING,//正在完成过程中
+  
+  FINISHED,//已经完成
+  FAILED,//已经失败
+  KILLED//已经kill了
 }

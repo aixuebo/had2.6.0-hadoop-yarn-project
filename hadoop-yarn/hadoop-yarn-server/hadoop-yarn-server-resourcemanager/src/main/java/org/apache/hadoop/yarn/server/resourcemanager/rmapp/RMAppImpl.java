@@ -136,24 +136,27 @@ public class RMAppImpl implements RMApp, Recoverable {
   // Mutable fields
   private long startTime;
   private long finishTime = 0;
-  private long storedFinishTime = 0;
+  private long storedFinishTime = 0;//FinalSaving过程中的时间
   // This field isn't protected by readlock now.
   private volatile RMAppAttempt currentAttempt;
   private String queue;
   private EventHandler handler;
   private static final AppFinishedTransition FINISHED_TRANSITION =
       new AppFinishedTransition();
+  
+  //该app运行在哪些node节点上,即哪些node节点上运行属于该app的容器
   private Set<NodeId> ranNodes = new ConcurrentSkipListSet<NodeId>();
 
   // These states stored are only valid when app is at killing or final_saving.
-  private RMAppState stateBeforeKilling;
-  private RMAppState stateBeforeFinalSaving;
-  private RMAppEvent eventCausingFinalSaving;
-  private RMAppState targetedFinalState;
+  private RMAppState stateBeforeKilling;//记录kill过程前的状态
   private RMAppState recoveredFinalState;
   private ResourceRequest amReq;
 
-  Object transitionTodo;
+  //以下是同时配套使用的
+  private RMAppState stateBeforeFinalSaving;//保持变更前app的状态
+  private RMAppEvent eventCausingFinalSaving;//保存产生的事件
+  private RMAppState targetedFinalState;//最终的状态
+  Object transitionTodo;//后需要处理的任务
 
   private static final StateMachineFactory<RMAppImpl,
                                            RMAppState,
@@ -1044,9 +1047,9 @@ public class RMAppImpl implements RMApp, Recoverable {
   }
 
   private static final class FinalSavingTransition extends RMAppTransition {
-    Object transitionToDo;
-    RMAppState targetedFinalState;
-    RMAppState stateToBeStored;
+    Object transitionToDo;//后续需要执行的动作
+    RMAppState targetedFinalState;//最终转换后的状态
+    RMAppState stateToBeStored;//保存在存储文件中的最终状态,该状态可以与targetedFinalState不同
 
     public FinalSavingTransition(Object transitionToDo,RMAppState targetedFinalState) {
       this(transitionToDo, targetedFinalState, targetedFinalState);

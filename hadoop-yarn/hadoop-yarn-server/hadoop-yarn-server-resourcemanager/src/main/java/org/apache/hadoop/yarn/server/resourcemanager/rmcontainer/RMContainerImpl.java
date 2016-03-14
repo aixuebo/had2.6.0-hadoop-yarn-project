@@ -161,7 +161,7 @@ public class RMContainerImpl implements RMContainer {
   private long creationTime;
   private long finishTime;
   private ContainerStatus finishedStatus;
-  private boolean isAMContainer;
+  private boolean isAMContainer;//true表示该容器是AM容器,默认是false
   private List<ResourceRequest> resourceRequests;//该容器要执行的资源集合,该资源分别分配在本地节点、rack节点、任意节点上
 
   public RMContainerImpl(Container container,

@@ -130,6 +130,7 @@ public class WebAppUtils {
     return addr;
   }
 
+  //http://123.239.39.68:8088/
   public static String getResolvedRMWebAppURLWithScheme(Configuration conf) {
     return getHttpSchemePrefix(conf)
         + getResolvedRMWebAppURLWithoutScheme(conf);

@@ -679,6 +679,7 @@ public class ApplicationMasterService extends AbstractService implements
     return pMsg;
   }
 
+  //注册一个yarn上的一个app的尝试任务 
   public void registerAppAttempt(ApplicationAttemptId attemptId) {
     AllocateResponse response = recordFactory.newRecordInstance(AllocateResponse.class);
     // set response id to -1 before application master for the following
@@ -689,6 +690,7 @@ public class ApplicationMasterService extends AbstractService implements
     rmContext.getNMTokenSecretManager().registerApplicationAttempt(attemptId);
   }
 
+  //从yarn上注销一个app的尝试任务
   public void unregisterAttempt(ApplicationAttemptId attemptId) {
     LOG.info("Unregistering app attempt : " + attemptId);
     responseMap.remove(attemptId);

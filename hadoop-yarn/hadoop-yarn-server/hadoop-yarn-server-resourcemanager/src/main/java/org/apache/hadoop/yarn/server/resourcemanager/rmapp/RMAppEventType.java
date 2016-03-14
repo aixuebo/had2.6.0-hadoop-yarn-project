@@ -23,7 +23,7 @@ public enum RMAppEventType {
   START,//表示一个应用从客户端已经提交到了RM
   RECOVER,
   KILL,//可以是客户端发来kill一个应用
-  MOVE, // Move app to a new queue
+  MOVE, // Move app to a new queue 该app从一个队列换成另外队列
 
   // Source: Scheduler and RMAppManager
   APP_REJECTED,//app拒绝,比如权限不对，不允许提交
@@ -32,15 +32,15 @@ public enum RMAppEventType {
   APP_ACCEPTED,
 
   // Source: RMAppAttempt
-  ATTEMPT_REGISTERED,
+  ATTEMPT_REGISTERED,//表示该尝试任务的一个AM已经在某个节点上产生了
   ATTEMPT_UNREGISTERED,
-  ATTEMPT_FINISHED, // Will send the final state
-  ATTEMPT_FAILED,
-  ATTEMPT_KILLED,
+  ATTEMPT_FINISHED, // Will send the final state 一个尝试任务完成
+  ATTEMPT_FAILED,//一个尝试任务失败了
+  ATTEMPT_KILLED,//一个尝试任务被kill了
   NODE_UPDATE,//node节点更新,主要切换node节点是否可以使用
   
   // Source: Container and ResourceTracker
-  APP_RUNNING_ON_NODE,
+  APP_RUNNING_ON_NODE,//表示该app在某个node上执行了一个容器
 
   // Source: RMStateStore
   APP_NEW_SAVED,//说明已经记录日志完成,因此可以接下来将app提交到调度器中了

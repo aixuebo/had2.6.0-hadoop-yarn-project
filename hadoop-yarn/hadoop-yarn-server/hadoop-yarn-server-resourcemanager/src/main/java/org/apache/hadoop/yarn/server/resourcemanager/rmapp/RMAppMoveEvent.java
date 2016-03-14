@@ -22,9 +22,12 @@ import org.apache.hadoop.yarn.api.records.ApplicationId;
 
 import com.google.common.util.concurrent.SettableFuture;
 
+/**
+ * 该app从一个队列换成另外队列
+ */
 public class RMAppMoveEvent extends RMAppEvent {
   private String targetQueue;
-  private SettableFuture<Object> result;
+  private SettableFuture<Object> result;//存储转换队列过程中的结果信息,比如异常信息
   
   public RMAppMoveEvent(ApplicationId id, String newQueue,
       SettableFuture<Object> resultFuture) {
