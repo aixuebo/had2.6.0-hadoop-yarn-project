@@ -695,6 +695,11 @@ public class RMAppAttemptImpl implements RMAppAttempt, Recoverable {
     }
   }
 
+  /**
+   * 将justFinishedContainers 刚刚完成的容器 转移到finishedContainersSentToAM中,并且清空justFinishedContainers的数据
+   * 
+   * 返回本次添加到finishedContainersSentToAM内的所有完成的容器集合
+   */
   @Override
   public List<ContainerStatus> pullJustFinishedContainers() {
     this.writeLock.lock();
@@ -712,14 +717,14 @@ public class RMAppAttemptImpl implements RMAppAttempt, Recoverable {
           .getKeepContainersAcrossApplicationAttempts();
       for (NodeId nodeId:justFinishedContainers.keySet()) {
 
-        // Clear and get current values
+        // Clear and get current values 清空当前justFinishedContainers内的value
         List<ContainerStatus> finishedContainers = justFinishedContainers.put
-            (nodeId, new ArrayList<ContainerStatus>());
+            (nodeId, new ArrayList<ContainerStatus>());//返回值是未清除前,该Node上存储的哪些完成的容器集合
 
-        if (keepContainersAcressAttempts) {
+        if (keepContainersAcressAttempts) {//添加所有完成的容器集合
           returnList.addAll(finishedContainers);
         } else {
-          // Filter out containers from previous attempt
+          // Filter out containers from previous attempt 仅仅保留本尝试任务所对应的完成的容器,以前的尝试任务的容器是被忽略掉的
           for (ContainerStatus containerStatus: finishedContainers) {
             if (containerStatus.getContainerId().getApplicationAttemptId()
                 .equals(this.getAppAttemptId())) {
@@ -783,6 +788,7 @@ public class RMAppAttemptImpl implements RMAppAttempt, Recoverable {
     }
   }
 
+  //从调度器上获取该尝试任务消耗了多少队列资源
   @Override
   public ApplicationResourceUsageReport getApplicationResourceUsageReport() {
     this.readLock.lock();
@@ -831,7 +837,9 @@ public class RMAppAttemptImpl implements RMAppAttempt, Recoverable {
   }
 
   public void transferStateFromPreviousAttempt(RMAppAttempt attempt) {
+	//返回justFinishedContainers集合
     this.justFinishedContainers = attempt.getJustFinishedContainersReference();
+    //返回已经完成的容器集合
     this.finishedContainersSentToAM =
         attempt.getFinishedContainersSentToAMReference();
   }
@@ -1292,7 +1300,7 @@ public class RMAppAttemptImpl implements RMAppAttempt, Recoverable {
   public boolean shouldCountTowardsMaxAttemptRetry() {
     try {
       this.readLock.lock();
-      int exitStatus = getAMContainerExitStatus();
+      int exitStatus = getAMContainerExitStatus();//获取AM的退出状态
       return !(exitStatus == ContainerExitStatus.PREEMPTED
           || exitStatus == ContainerExitStatus.ABORTED
           || exitStatus == ContainerExitStatus.DISKS_FAILED
@@ -1424,6 +1432,9 @@ public class RMAppAttemptImpl implements RMAppAttempt, Recoverable {
     this.amContainerExitStatus = status.getExitStatus();
   }
 
+  /**
+   * 记录AM容器ID完成了,退出状态是xxx,更详细的输出的url是xxx,请点击进去看详细信息 
+   */
   private String getAMContainerCrashedDiagnostics(
       RMAppAttemptContainerFinishedEvent finishEvent) {
     ContainerStatus status = finishEvent.getContainerStatus();
@@ -1494,6 +1505,9 @@ public class RMAppAttemptImpl implements RMAppAttempt, Recoverable {
     return diag;
   }
 
+  /**
+   * 不是期待的那样,AM就被注册了,即在错误的时间点上AM被注册了,因此是有问题的,返回FAILED即可
+   */
   private static class UnexpectedAMRegisteredTransition extends
       BaseFinalTransition {
 
@@ -1503,13 +1517,14 @@ public class RMAppAttemptImpl implements RMAppAttempt, Recoverable {
 
     @Override
     public void transition(RMAppAttemptImpl appAttempt, RMAppAttemptEvent event) {
-      assert appAttempt.submissionContext.getUnmanagedAM();
+      assert appAttempt.submissionContext.getUnmanagedAM();//这种方式一定发生在AM就是job提交的节点上运行的,因此不需要分配ALLOCATED_SAVING和ALLOCATED两个状态
       appAttempt.diagnostics.append(getUnexpectedAMRegisteredDiagnostics());
       super.transition(appAttempt, event);
     }
 
   }
 
+  //Unmanaged的AM,必须是要AM尝试任务到达LAUNCHED状态之后,才能被注册的
   private static String getUnexpectedAMRegisteredDiagnostics() {
     return "Unmanaged AM must register after AM attempt reaches LAUNCHED state.";
   }
@@ -1532,6 +1547,7 @@ public class RMAppAttemptImpl implements RMAppAttempt, Recoverable {
     }
   }
 
+  //由ApplicationMasterService触发的,当一个AM失效了,就会触发该函数
   private static final class AMUnregisteredTransition implements
       MultipleArcTransition<RMAppAttemptImpl, RMAppAttemptEvent, RMAppAttemptState> {
 
@@ -1539,10 +1555,10 @@ public class RMAppAttemptImpl implements RMAppAttempt, Recoverable {
     public RMAppAttemptState transition(RMAppAttemptImpl appAttempt,
         RMAppAttemptEvent event) {
       // Tell the app
-      if (appAttempt.getSubmissionContext().getUnmanagedAM()) {
+      if (appAttempt.getSubmissionContext().getUnmanagedAM()) {//说明AM就是job所在节点
         // Unmanaged AMs have no container to wait for, so they skip
-        // the FINISHING state and go straight to FINISHED.
-        appAttempt.updateInfoOnAMUnregister(event);
+        // the FINISHING state and go straight to FINISHED. 因此没有真正的AM容器,因此跳过FINISHING状态,直接到FINISHED状态即可
+        appAttempt.updateInfoOnAMUnregister(event);//当AM被ApplicationMasterService触发,该AM已经失效时,会设置该尝试任务的全部信息,比如进度就是100%、最终状态等
         new FinalTransition(RMAppAttemptState.FINISHED).transition(
             appAttempt, event);
         return RMAppAttemptState.FINISHED;
@@ -1584,6 +1600,7 @@ public class RMAppAttemptImpl implements RMAppAttempt, Recoverable {
     }
   }
 
+  //当AM被ApplicationMasterService触发,该AM已经失效时,会设置该尝试任务的全部信息,比如进度就是100%、最终状态等
   private void updateInfoOnAMUnregister(RMAppAttemptEvent event) {
     progress = 1.0f;
     RMAppAttemptUnregistrationEvent unregisterEvent =
@@ -1638,20 +1655,20 @@ public class RMAppAttemptImpl implements RMAppAttempt, Recoverable {
 
 
   // Ack NM to remove finished containers from context.
+  //向Node节点发送该app哪些容器已经完成了
   private void sendFinishedContainersToNM() {
     for (NodeId nodeId : finishedContainersSentToAM.keySet()) {
 
-      // Clear and get current values
-      List<ContainerStatus> currentSentContainers =
-          finishedContainersSentToAM.put(nodeId,
-            new ArrayList<ContainerStatus>());
-      List<ContainerId> containerIdList =
-          new ArrayList<ContainerId>(currentSentContainers.size());
+      // Clear and get current values 清空当前已经完成的容器
+      List<ContainerStatus> currentSentContainers = finishedContainersSentToAM.put(nodeId,new ArrayList<ContainerStatus>());//返回值是清空前完成了哪些容器集合
+          
+      //已经完成了哪些容器集合
+      List<ContainerId> containerIdList = new ArrayList<ContainerId>(currentSentContainers.size());
       for (ContainerStatus containerStatus : currentSentContainers) {
         containerIdList.add(containerStatus.getContainerId());
       }
-      eventHandler.handle(new RMNodeFinishedContainersPulledByAMEvent(nodeId,
-        containerIdList));
+      
+      eventHandler.handle(new RMNodeFinishedContainersPulledByAMEvent(nodeId,containerIdList));
     }
   }
 
@@ -1659,14 +1676,16 @@ public class RMAppAttemptImpl implements RMAppAttempt, Recoverable {
   // removed from NMContext.
   private void sendAMContainerToNM(RMAppAttemptImpl appAttempt,
       RMAppAttemptContainerFinishedEvent containerFinishedEvent) {
+	  
+	//向完成的容器集合中加入该AM容器
     NodeId nodeId = containerFinishedEvent.getNodeId();
-    finishedContainersSentToAM.putIfAbsent(nodeId,
-      new ArrayList<ContainerStatus>());
-    appAttempt.finishedContainersSentToAM.get(nodeId).add(
-      containerFinishedEvent.getContainerStatus());
+    finishedContainersSentToAM.putIfAbsent(nodeId,new ArrayList<ContainerStatus>());
+      
+    appAttempt.finishedContainersSentToAM.get(nodeId).add(containerFinishedEvent.getContainerStatus());
+      
     if (!appAttempt.getSubmissionContext()
       .getKeepContainersAcrossApplicationAttempts()) {
-      appAttempt.sendFinishedContainersToNM();
+      appAttempt.sendFinishedContainersToNM();//尝试去向Node节点发送该app哪些容器已经完成了
     }
   }
 
@@ -1691,6 +1710,7 @@ public class RMAppAttemptImpl implements RMAppAttempt, Recoverable {
     }
   }
 
+  //表示AM的容器在运行过过程中被完成了,这个是非法的,因此属于突然crash
   private static class AMContainerCrashedAtRunningTransition extends
       BaseTransition {
     @Override
@@ -1830,12 +1850,15 @@ public class RMAppAttemptImpl implements RMAppAttempt, Recoverable {
     }
   }
 
+  /**
+   * 通知yarn,目前该尝试任务是什么状态
+   */
   @Override
   public YarnApplicationAttemptState createApplicationAttemptState() {
     RMAppAttemptState state = getState();
     // If AppAttempt is in FINAL_SAVING state, return its previous state.
     if (state.equals(RMAppAttemptState.FINAL_SAVING)) {
-      state = stateBeforeFinalSaving;
+      state = stateBeforeFinalSaving;//返回转换到FINAL_SAVING之前的状态
     }
     return RMServerUtils.createApplicationAttemptState(state);
   }

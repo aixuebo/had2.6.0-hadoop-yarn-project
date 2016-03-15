@@ -26,6 +26,10 @@ public enum RMAppAttemptState {
   NEW, SUBMITTED,//已经提交到队列中了
   SCHEDULED,//队列已经调度了该尝试任务,该阶段要向调度器提交一个AM容器
   
+  /**
+   * 注意:
+   * appAttempt.submissionContext.getUnmanagedAM();//这种方式一定发生在AM就是job提交的节点上运行的,因此不需要分配ALLOCATED_SAVING和ALLOCATED两个状态
+   */
   ALLOCATED_SAVING,//说明正在保存分配的AM容器信息
   ALLOCATED,//说明AM容器已经分配完成
   

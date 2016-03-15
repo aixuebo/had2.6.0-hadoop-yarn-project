@@ -31,13 +31,13 @@ public enum RMAppAttemptEventType {
   LAUNCH_FAILED,//表示AM启动失败了
 
   // Source: AMLivelinessMonitor  AppAttempt长期没有向resourceManager发送心跳,则resourceManager认为其过期
-  EXPIRE,//通知ResourceManager这个应用已经过期了,即app的尝试任务ApplicationMaster长时间没有心跳反应了
+  EXPIRE,//通知ResourceManager这个应用已经过期了,即app的尝试任务ApplicationMaster长时间没有心跳反应了,AMLivelinessMonitor类触发该事件
   
   // Source: ApplicationMasterService
   REGISTERED,//表示AM完全注册到RM了,发送一个事件,尝试任务的状态从LAUNCHED变成RUNNING状态
   STATUS_UPDATE,//更新AM的执行进度
-  UNREGISTERED,
-
+  UNREGISTERED,//由ApplicationMasterService触发的,当一个AM失效了,就会触发该函数
+  
   // Source: Containers
   CONTAINER_ALLOCATED,//有容器分配给该尝试任务了
   CONTAINER_FINISHED,
