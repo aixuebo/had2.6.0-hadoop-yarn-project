@@ -28,12 +28,13 @@ import org.apache.hadoop.yarn.api.records.Resource;
  * 
  * The event encapsulates information on the amount of reservation
  * and the node on which the reservation is in effect.
+ * 预留一个容器事件
  */
 public class RMContainerReservedEvent extends RMContainerEvent {
 
-  private final Resource reservedResource;
-  private final NodeId reservedNode;
-  private final Priority reservedPriority;
+  private final Resource reservedResource;//预留的资源
+  private final NodeId reservedNode;//在哪个节点上预留的该容器
+  private final Priority reservedPriority;//预留的优先级
   
   public RMContainerReservedEvent(ContainerId containerId,
       Resource reservedResource, NodeId reservedNode, 

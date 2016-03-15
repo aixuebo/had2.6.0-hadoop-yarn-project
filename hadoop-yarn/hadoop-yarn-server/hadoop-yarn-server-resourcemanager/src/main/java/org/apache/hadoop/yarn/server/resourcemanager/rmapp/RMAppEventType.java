@@ -33,7 +33,7 @@ public enum RMAppEventType {
 
   // Source: RMAppAttempt
   ATTEMPT_REGISTERED,//表示该尝试任务的一个AM已经在某个节点上产生了
-  ATTEMPT_UNREGISTERED,
+  ATTEMPT_UNREGISTERED,//表示该尝试任务被ApplicationMasterService触发了,即该AM失效了
   ATTEMPT_FINISHED, // Will send the final state 一个尝试任务完成
   ATTEMPT_FAILED,//一个尝试任务失败了
   ATTEMPT_KILLED,//一个尝试任务被kill了

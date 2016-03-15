@@ -41,7 +41,7 @@ public enum RMNodeEventType {
   CLEANUP_CONTAINER,//清理容器
 
   // Source: RMAppAttempt
-  FINISHED_CONTAINERS_PULLED_BY_AM,
+  FINISHED_CONTAINERS_PULLED_BY_AM,//RMAppAttempt尝试任务回复给Node,说该尝试任务哪些容器已经完成了
 
   // Source: NMLivelinessMonitor
   EXPIRE

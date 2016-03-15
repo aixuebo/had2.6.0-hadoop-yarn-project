@@ -45,7 +45,6 @@ import org.apache.hadoop.yarn.util.Records;
  * </p>
  * 代表某个容器的详细信息
  */
-
 @Public
 @Unstable
 public abstract class ContainerReport {
@@ -56,16 +55,16 @@ public abstract class ContainerReport {
       long creationTime, long finishTime, String diagnosticInfo, String logUrl,
       int containerExitStatus, ContainerState containerState) {
     ContainerReport report = Records.newRecord(ContainerReport.class);
-    report.setContainerId(containerId);
-    report.setAllocatedResource(allocatedResource);
-    report.setAssignedNode(assignedNode);
-    report.setPriority(priority);
-    report.setCreationTime(creationTime);
-    report.setFinishTime(finishTime);
-    report.setDiagnosticsInfo(diagnosticInfo);
-    report.setLogUrl(logUrl);
-    report.setContainerExitStatus(containerExitStatus);
-    report.setContainerState(containerState);
+    report.setContainerId(containerId);//容器ID
+    report.setAllocatedResource(allocatedResource);//容器内包含的资源,包括CPU和内存
+    report.setAssignedNode(assignedNode);//容器被分配到哪个Node上执行的
+    report.setPriority(priority);//容器的优先级
+    report.setCreationTime(creationTime);//容器创建时间
+    report.setFinishTime(finishTime);//容器完成事件
+    report.setDiagnosticsInfo(diagnosticInfo);//容器的message信息
+    report.setLogUrl(logUrl);//外界访问该容器的日志url
+    report.setContainerExitStatus(containerExitStatus);//容器的退出状态码
+    report.setContainerState(containerState);//容器最终完成的状态
     return report;
   }
 

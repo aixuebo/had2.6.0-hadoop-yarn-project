@@ -21,9 +21,10 @@ package org.apache.hadoop.yarn.server.resourcemanager.rmcontainer;
 import org.apache.hadoop.yarn.api.records.ContainerId;
 import org.apache.hadoop.yarn.api.records.ContainerStatus;
 
+//一个容器执行完了,发送该事件
 public class RMContainerFinishedEvent extends RMContainerEvent {
 
-  private final ContainerStatus remoteContainerStatus;
+  private final ContainerStatus remoteContainerStatus;//远程容器执行完后的状态
 
   public RMContainerFinishedEvent(ContainerId containerId,
       ContainerStatus containerStatus, RMContainerEventType event) {

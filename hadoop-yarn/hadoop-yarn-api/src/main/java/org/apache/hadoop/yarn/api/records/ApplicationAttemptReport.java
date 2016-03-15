@@ -58,14 +58,14 @@ public abstract class ApplicationAttemptReport {
       YarnApplicationAttemptState state, ContainerId amContainerId) {
     ApplicationAttemptReport report =
         Records.newRecord(ApplicationAttemptReport.class);
-    report.setApplicationAttemptId(applicationAttemptId);
-    report.setHost(host);
-    report.setRpcPort(rpcPort);
-    report.setTrackingUrl(url);
-    report.setOriginalTrackingUrl(oUrl);
-    report.setDiagnostics(diagnostics);
-    report.setYarnApplicationAttemptState(state);
-    report.setAMContainerId(amContainerId);
+    report.setApplicationAttemptId(applicationAttemptId);//尝试任务ID
+    report.setHost(host);//该尝试任务在哪个host上执行的AM
+    report.setRpcPort(rpcPort);//AM所对应的rpc端口
+    report.setTrackingUrl(url);//AM对外的url
+    report.setOriginalTrackingUrl(oUrl);//AM对外的url
+    report.setDiagnostics(diagnostics);//该尝试任务的一些message信息
+    report.setYarnApplicationAttemptState(state);//该尝试任务当前的状态
+    report.setAMContainerId(amContainerId);//该尝试任务的AM对应的容器ID
     return report;
   }
 

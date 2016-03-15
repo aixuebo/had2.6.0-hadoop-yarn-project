@@ -153,8 +153,8 @@ public class RMAppManager implements EventHandler<RMAppManagerEvent>,
      *            be <code>null</code>.
      */
     public static SummaryBuilder createAppSummary(RMApp app) {
-      String trackingUrl = "N/A";
-      String host = "N/A";
+      String trackingUrl = "N/A";//该app的尝试任务暴露的url
+      String host = "N/A";//该app的尝试任务在哪个host上执行的AM
       RMAppAttempt attempt = app.getCurrentAppAttempt();
       if (attempt != null) {
         trackingUrl = attempt.getTrackingUrl();

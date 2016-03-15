@@ -44,6 +44,7 @@ import org.apache.hadoop.yarn.server.resourcemanager.RMContext;
 import org.apache.hadoop.yarn.server.resourcemanager.rmapp.RMApp;
 import org.apache.hadoop.yarn.server.resourcemanager.rmapp.RMAppRunningOnNodeEvent;
 import org.apache.hadoop.yarn.server.resourcemanager.rmapp.attempt.RMAppAttempt;
+import org.apache.hadoop.yarn.server.resourcemanager.rmapp.attempt.RMAppAttemptEventType;
 import org.apache.hadoop.yarn.server.resourcemanager.rmapp.attempt.event.RMAppAttemptContainerAllocatedEvent;
 import org.apache.hadoop.yarn.server.resourcemanager.rmapp.attempt.event.RMAppAttemptContainerFinishedEvent;
 import org.apache.hadoop.yarn.server.resourcemanager.rmnode.RMNodeCleanContainerEvent;
@@ -155,12 +156,15 @@ public class RMContainerImpl implements RMContainer {
   private final ContainerAllocationExpirer containerAllocationExpirer;
   private final String user;
 
-  private Resource reservedResource;
-  private NodeId reservedNode;
-  private Priority reservedPriority;
+  //跟预留相关的属性
+  private Resource reservedResource;//预留了多少资源
+  private NodeId reservedNode;//在哪个节点上预留的该资源
+  private Priority reservedPriority;//预留的资源的优先级是什么
+  
+  
   private long creationTime;
   private long finishTime;
-  private ContainerStatus finishedStatus;
+  private ContainerStatus finishedStatus;//容器最终完成后的状态
   private boolean isAMContainer;//true表示该容器是AM容器,默认是false
   private List<ResourceRequest> resourceRequests;//该容器要执行的资源集合,该资源分别分配在本地节点、rack节点、任意节点上
 
@@ -455,6 +459,7 @@ public class RMContainerImpl implements RMContainer {
     }
   }
 
+  //表示队列已经分配了该容器
   private static final class AcquiredTransition extends BaseTransition {
 
     @Override
@@ -466,6 +471,7 @@ public class RMContainerImpl implements RMContainer {
       container.containerAllocationExpirer.register(container.getContainerId());
 
       // Tell the app
+      //发送事件RMAppEventType.APP_RUNNING_ON_NODE,通知app该容器在该node上被调度
       container.eventHandler.handle(new RMAppRunningOnNodeEvent(container
           .getApplicationAttemptId().getApplicationId(), container.nodeId));
     }
@@ -476,11 +482,11 @@ public class RMContainerImpl implements RMContainer {
     @Override
     public void transition(RMContainerImpl container, RMContainerEvent event) {
       // Unregister from containerAllocationExpirer.
-      container.containerAllocationExpirer.unregister(container
-          .getContainerId());
+      container.containerAllocationExpirer.unregister(container.getContainerId());
     }
   }
 
+  //说明容器执行完了
   private static class FinishedTransition extends BaseTransition {
 
     @Override
@@ -496,12 +502,11 @@ public class RMContainerImpl implements RMContainer {
 
       container.eventHandler.handle(new RMAppAttemptContainerFinishedEvent(
         container.appAttemptId, finishedEvent.getRemoteContainerStatus(),
-          container.getAllocatedNode()));
+          container.getAllocatedNode()));//发送RMAppAttemptEventType.CONTAINER_FINISHED事件,通知尝试任务,该一个容器在哪个node节点上运行完成
 
-      container.rmContext.getRMApplicationHistoryWriter().containerFinished(
-        container);
-      container.rmContext.getSystemMetricsPublisher().containerFinished(
-          container, container.finishTime);
+      container.rmContext.getRMApplicationHistoryWriter().containerFinished(container);//记录日志
+        
+      container.rmContext.getSystemMetricsPublisher().containerFinished(container, container.finishTime);
     }
 
     private static void updateAttemptMetrics(RMContainerImpl container) {
@@ -517,7 +522,7 @@ public class RMContainerImpl implements RMContainer {
       }
 
       if (rmAttempt != null) {
-        long usedMillis = container.finishTime - container.creationTime;
+        long usedMillis = container.finishTime - container.creationTime;//该容器运行的时间
         long memorySeconds = resource.getMemory()
                               * usedMillis / DateUtils.MILLIS_PER_SECOND;
         long vcoreSeconds = resource.getVirtualCores()
@@ -533,8 +538,7 @@ public class RMContainerImpl implements RMContainer {
     @Override
     public void transition(RMContainerImpl container, RMContainerEvent event) {
       // Unregister from containerAllocationExpirer.
-      container.containerAllocationExpirer.unregister(container
-          .getContainerId());
+      container.containerAllocationExpirer.unregister(container.getContainerId());
 
       // Inform AppAttempt
       super.transition(container, event);
@@ -547,8 +551,8 @@ public class RMContainerImpl implements RMContainer {
     public void transition(RMContainerImpl container, RMContainerEvent event) {
 
       // Unregister from containerAllocationExpirer.
-      container.containerAllocationExpirer.unregister(container
-          .getContainerId());
+      container.containerAllocationExpirer.unregister(container.getContainerId());
+          
 
       // Inform node
       container.eventHandler.handle(new RMNodeCleanContainerEvent(

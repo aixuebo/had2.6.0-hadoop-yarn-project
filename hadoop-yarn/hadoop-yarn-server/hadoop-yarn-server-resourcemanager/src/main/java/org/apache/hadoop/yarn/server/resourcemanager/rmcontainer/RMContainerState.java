@@ -20,12 +20,14 @@ package org.apache.hadoop.yarn.server.resourcemanager.rmcontainer;
 
 public enum RMContainerState {
   NEW, 
-  RESERVED, 
-  ALLOCATED, 
-  ACQUIRED, 
-  RUNNING, 
-  COMPLETED, 
-  EXPIRED, 
-  RELEASED, 
-  KILLED
+  RESERVED, //预保留
+  ALLOCATED, //说明该容器已经准备好了
+  ACQUIRED,//表示队列已经分配了该容器 
+  RUNNING, //说明该容器已经启动了
+  
+  COMPLETED, //说明该容器已经完成了,是已知的完成状态
+  EXPIRED,//该容器已经无心跳了,也是一种完成状态
+  KILLED,//该容器已经被kill杀死了,也是一种完成状态
+  
+  RELEASED //调度器触发的该事件,释放一个容器
 }

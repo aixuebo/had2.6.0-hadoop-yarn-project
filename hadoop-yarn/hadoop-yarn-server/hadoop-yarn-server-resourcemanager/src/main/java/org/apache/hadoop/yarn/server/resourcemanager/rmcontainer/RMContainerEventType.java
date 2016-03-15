@@ -19,21 +19,21 @@
 package org.apache.hadoop.yarn.server.resourcemanager.rmcontainer;
 
 public enum RMContainerEventType {
-
+	//RMContainerEventType.ACQUIRED
   // Source: SchedulerApp
   START,
-  ACQUIRED,//容器已经准备发送给对应的AM了
+  ACQUIRED,//容器已经准备发送给对应的AM了,是SchedulerApplicationAttempt调度器产生的该事件,表示队列已经分配了该容器
   KILL, // Also from Node on NodeRemoval
-  RESERVED,
+  RESERVED,//抢占,预保留,表示在哪个node节点上预留了多少资源的容器
 
   LAUNCHED,//说明该容器已经在节点上启动了
-  FINISHED,
+  FINISHED,//该容器已经完成
 
   // Source: ApplicationMasterService->Scheduler
-  RELEASED,
+  RELEASED,//由调度器产生,使该容器释放掉
 
   // Source: ContainerAllocationExpirer  
-  EXPIRE,
+  EXPIRE,//该容器没有心跳了
 
   RECOVER//该容器是恢复事件
 }
