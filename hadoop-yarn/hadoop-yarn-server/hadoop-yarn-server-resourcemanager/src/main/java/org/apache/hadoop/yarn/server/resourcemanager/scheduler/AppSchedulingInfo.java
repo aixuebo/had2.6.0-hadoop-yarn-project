@@ -185,7 +185,7 @@ public class AppSchedulingInfo {
           LOG.info("checking for deactivate... ");
           checkForDeactivation();
         }
-        
+
         int lastRequestContainers = lastRequest != null ? lastRequest
             .getNumContainers() : 0;
         Resource lastRequestCapability = lastRequest != null ? lastRequest
