@@ -75,15 +75,15 @@ public abstract class AllocateResponse {
       Resource availResources, AMCommand command, int numClusterNodes,
       PreemptionMessage preempt, List<NMToken> nmTokens) {
     AllocateResponse response = Records.newRecord(AllocateResponse.class);
-    response.setNumClusterNodes(numClusterNodes);
-    response.setResponseId(responseId);
-    response.setCompletedContainersStatuses(completedContainers);
-    response.setAllocatedContainers(allocatedContainers);
-    response.setUpdatedNodes(updatedNodes);
-    response.setAvailableResources(availResources);
+    response.setNumClusterNodes(numClusterNodes);//此时集群中有多少个node节点
+    response.setResponseId(responseId);//本次回复的ID
+    response.setCompletedContainersStatuses(completedContainers);//yarn上已经完成的容器,这些容器交给AM去继续处理
+    response.setAllocatedContainers(allocatedContainers);//调度器分配给该AM的容器,这些容器可以去执行
+    response.setUpdatedNodes(updatedNodes);//该yarn上有一些node节点已经变更了
+    response.setAvailableResources(availResources);//集群的资源最大值
     response.setAMCommand(command);
     response.setPreemptionMessage(preempt);
-    response.setNMTokens(nmTokens);
+    response.setNMTokens(nmTokens);//对应setAllocatedContainers分配的每一个容器的token
     return response;
   }
 

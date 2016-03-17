@@ -37,7 +37,7 @@ public class Allocation {
   final Set<ContainerId> strictContainers;//严格的容器
   final Set<ContainerId> fungibleContainers;//代替的容器
   final List<ResourceRequest> fungibleResources;//代替的资源
-  final List<NMToken> nmTokens;
+  final List<NMToken> nmTokens;//containers中每一个容器对应的token对象
 
   public Allocation(List<Container> containers, Resource resourceLimit,
       Set<ContainerId> strictContainers, Set<ContainerId> fungibleContainers,
