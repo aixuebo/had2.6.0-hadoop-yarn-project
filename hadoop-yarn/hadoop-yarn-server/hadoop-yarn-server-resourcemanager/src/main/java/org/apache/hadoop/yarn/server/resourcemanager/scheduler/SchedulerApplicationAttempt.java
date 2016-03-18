@@ -102,6 +102,7 @@ public class SchedulerApplicationAttempt {
   // receive the release request form AM before it receives the container status
   // from NM for recovery. In this case, the to-be-recovered containers reported
   // by NM should not be recovered.
+  //已经释放的容器ID,用于恢复场景使用
   private Set<ContainerId> pendingRelease = null;
 
   /**

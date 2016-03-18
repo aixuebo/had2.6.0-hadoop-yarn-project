@@ -197,6 +197,9 @@ public class Resources {
     return resourceCalculator.ratio(lhs, rhs);
   }
   
+  /**
+   * lhs.内存/rhs.内存
+   */
   public static float divide(
       ResourceCalculator resourceCalculator,
       Resource clusterResource, Resource lhs, Resource rhs) {

@@ -64,6 +64,7 @@ public class FiCaSchedulerApp extends SchedulerApplicationAttempt {
 
   private static final Log LOG = LogFactory.getLog(FiCaSchedulerApp.class);
 
+  //参与竞争的活跃的容器ID
   private final Set<ContainerId> containersToPreempt = new HashSet<ContainerId>();
     
   private CapacityHeadroomProvider headroomProvider;
@@ -209,7 +210,7 @@ public class FiCaSchedulerApp extends SchedulerApplicationAttempt {
   }
 
   /**
-   * 还任务正在等待的资源总数
+   * 该app正在等待的请求,还尚需要多少资源
    */
   public synchronized Resource getTotalPendingRequests() {
     Resource ret = Resource.newInstance(0, 0);
@@ -223,7 +224,7 @@ public class FiCaSchedulerApp extends SchedulerApplicationAttempt {
   }
 
   public synchronized void addPreemptContainer(ContainerId cont){
-    // ignore already completed containers
+    // ignore already completed containers 如果容器是活跃的,因此添加到竞争的容器中
     if (liveContainers.containsKey(cont)) {
       containersToPreempt.add(cont);
     }
@@ -242,21 +243,27 @@ public class FiCaSchedulerApp extends SchedulerApplicationAttempt {
   public synchronized Allocation getAllocation(ResourceCalculator rc,
       Resource clusterResource, Resource minimumAllocation) {
 
+	//返回当前竞争的容器ID集合
     Set<ContainerId> currentContPreemption = Collections.unmodifiableSet(
         new HashSet<ContainerId>(containersToPreempt));
-    containersToPreempt.clear();
-    Resource tot = Resource.newInstance(0, 0);
+    containersToPreempt.clear();//清空
+    
+    Resource tot = Resource.newInstance(0, 0);//计算竞争容器所需要的总资源
     for(ContainerId c : currentContPreemption){
       Resources.addTo(tot,
           liveContainers.get(c).getContainer().getResource());
     }
+    
+    //tot/minimumAllocation 等于需要多少个单位资源
     int numCont = (int) Math.ceil(
         Resources.divide(rc, clusterResource, tot, minimumAllocation));
+    
+    //申请numCont个容器资源
     ResourceRequest rr = ResourceRequest.newInstance(
         Priority.UNDEFINED, ResourceRequest.ANY,
         minimumAllocation, numCont);
-    ContainersAndNMTokensAllocation allocation =
-        pullNewlyAllocatedContainersAndNMTokens();
+    
+    ContainersAndNMTokensAllocation allocation = pullNewlyAllocatedContainersAndNMTokens();
     return new Allocation(allocation.getContainerList(), getHeadroom(), null,
       currentContPreemption, Collections.singletonList(rr),
       allocation.getNMTokenList());

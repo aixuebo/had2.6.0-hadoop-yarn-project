@@ -19,7 +19,7 @@
 package org.apache.hadoop.yarn.server.resourcemanager.scheduler.event;
 
 public enum SchedulerEventType {
-
+	
   // Source: Node
   NODE_ADDED,//向资源调度器触发一个事件,一个节点被添加到调度器中
   NODE_REMOVED,//当某一个节点不健康了,则从调度器移除该节点
