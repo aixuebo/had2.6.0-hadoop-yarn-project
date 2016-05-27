@@ -75,7 +75,7 @@
 
     <property>
         <name>yarn.nodemanager.log-dirs</name>
-        <value>/data/coohua/logs/hadoop/userlogs</value>
+        <value>/data/xuebo/logs/hadoop/userlogs</value>
     </property>
 
   
