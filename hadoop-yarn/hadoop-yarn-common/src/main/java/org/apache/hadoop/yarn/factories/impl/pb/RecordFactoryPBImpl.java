@@ -28,6 +28,10 @@ import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.yarn.exceptions.YarnRuntimeException;
 import org.apache.hadoop.yarn.factories.RecordFactory;
 
+/**
+ * 去class的包/impl.pb/class的实现类PBImpl
+ * 给定一个class接口,如何找到对应的实现类
+ */
 @Private
 public class RecordFactoryPBImpl implements RecordFactory {
 

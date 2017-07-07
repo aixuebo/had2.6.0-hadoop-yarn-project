@@ -467,6 +467,7 @@ public class MemoryTimelineStore
     return entityToReturn;
   }
 
+   //true表示filter中的key-value已经存在了
   private static boolean matchFilter(Map<String, Object> tags,
       NameValuePair filter) {
     Object value = tags.get(filter.getName());
@@ -478,6 +479,7 @@ public class MemoryTimelineStore
     return true;
   }
 
+  //true表示filter中的key-value已经存在了
   private static boolean matchPrimaryFilter(Map<String, Set<Object>> tags,
       NameValuePair filter) {
     Set<Object> value = tags.get(filter.getName());
@@ -488,6 +490,7 @@ public class MemoryTimelineStore
     }
   }
 
+  //long转换成int,其他的保持不变
   private static Object maybeConvert(Object o) {
     if (o instanceof Long) {
       Long l = (Long)o;

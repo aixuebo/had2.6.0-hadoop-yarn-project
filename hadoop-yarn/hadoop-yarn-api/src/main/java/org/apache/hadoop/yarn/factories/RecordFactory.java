@@ -21,6 +21,7 @@ package org.apache.hadoop.yarn.factories;
 import org.apache.hadoop.classification.InterfaceAudience.LimitedPrivate;
 import org.apache.hadoop.classification.InterfaceStability.Unstable;
 
+//给定一个class接口,如何找到对应的实现类
 @LimitedPrivate({ "MapReduce", "YARN" })
 @Unstable
 public interface RecordFactory {
